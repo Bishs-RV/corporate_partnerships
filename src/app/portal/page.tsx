@@ -157,7 +157,7 @@ export default function PortalPage() {
             />
             <div className="hidden sm:block border-l-2 border-gray-200 h-16"></div>
             <Image
-              src="/Kiewit-logo.png"
+              src="/Kiewit-Logo.png"
               alt="Kiewit Logo"
               width={100}
               height={50}
