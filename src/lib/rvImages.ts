@@ -22,27 +22,29 @@ export interface RVImageData {
 export function getRVImages(stockNumber: string): RVImageData | undefined {
   if (!stockNumber) return undefined;
   
+  const mapping = imageMapping as Record<string, RVImageData>;
+  
   // Clean up stock number (remove spaces, convert to uppercase, etc.)
   const cleanStock = stockNumber.toString().trim().toUpperCase();
   
   // Try exact match first
-  if (imageMapping[stockNumber]) {
-    return imageMapping[stockNumber] as RVImageData;
+  if (mapping[stockNumber]) {
+    return mapping[stockNumber];
   }
   
   // Try cleaned version
-  if (imageMapping[cleanStock]) {
-    return imageMapping[cleanStock] as RVImageData;
+  if (mapping[cleanStock]) {
+    return mapping[cleanStock];
   }
   
   // Try case-insensitive search
-  const keys = Object.keys(imageMapping);
+  const keys = Object.keys(mapping);
   const matchingKey = keys.find(key => 
     key.toString().trim().toUpperCase() === cleanStock
   );
   
   if (matchingKey) {
-    return imageMapping[matchingKey] as RVImageData;
+    return mapping[matchingKey];
   }
   
   return undefined;
