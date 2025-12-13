@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import Image from 'next/image';
 import { RV } from '@/types/inventory';
-import { getPrimaryImage, getAllImages } from '@/lib/rvImages';
+import { getPrimaryImage, getAllImages, getDetailUrl } from '@/lib/rvImages';
 
 interface RVCardProps {
   rv: RV;
   discountPercent?: number;
   typeDescription?: string; // Full RV type name
+  locations?: Array<{ cmf: number; location: string; storename: string }>;
+  distanceInMiles?: number | null; // Distance from user's location
   onBuyNow?: (rv: RV) => void;
   onViewDetails?: (rv: RV) => void;
 }
@@ -15,6 +17,8 @@ export default function RVCard({
   rv, 
   discountPercent = 0.15, // 15% default discount
   typeDescription,
+  locations = [],
+  distanceInMiles = null,
   onBuyNow,
   onViewDetails 
 }: RVCardProps) {
@@ -46,29 +50,17 @@ export default function RVCard({
   // Total savings (price discount + interest savings)
   const totalSavings = priceSavings + interestSavings;
   
-  // Map location codes to full names
-  const getLocationName = (location: string): string => {
-    const locationMap: { [key: string]: string } = {
-      'IDF': 'Idaho Falls, ID',
-      'LVO': 'Las Vegas, NV',
-      'BOI': 'Boise, ID',
-      'SLC': 'Salt Lake City, UT',
-      'TUC': 'Tucson, AZ',
-      'MES': 'Mesa, AZ',
-      'TUS': 'Tuscon, AZ',
-      'REN': 'Reno, NV',
-      'ABQ': 'Albuquerque, NM',
-      'OMA': 'Omaha, NE',
-      'FER': 'Fernley, NV',
-    };
-    return locationMap[location] || location;
-  };
-  
-  const locationDisplay = rv.location ? getLocationName(rv.location) : '';
+  // Location display - lookup full location name from locations array using cmfId
+  // Show only the full store name (not the three-letter code)
+  const foundLocation = rv.cmfId ? locations.find(loc => loc.cmf === rv.cmfId) : null;
+  const locationDisplay = foundLocation
+    ? foundLocation.storename
+    : rv.location || '';
   
   // Get images for this RV by stock number
   const rvImage = getPrimaryImage(rv.stock);
   const allImages = getAllImages(rv.stock);
+  const detailUrl = getDetailUrl(rv.stock);
   const [showImageModal, setShowImageModal] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [thumbnailIndex, setThumbnailIndex] = useState(0);
@@ -157,14 +149,30 @@ export default function RVCard({
         {/* Header with Discount Badge */}
         <div className="flex justify-between items-start mb-3">
           <div className="flex-1">
-            <h3 className="text-base font-bold text-gray-900 mb-1 uppercase">{rv.name}</h3>
-            {/* Stock Number below title */}
+            {detailUrl ? (
+              <a 
+                href={detailUrl} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-base font-bold text-gray-900 hover:text-blue-600 mb-1 uppercase transition-colors inline-block"
+              >
+                {rv.name}
+              </a>
+            ) : (
+              <h3 className="text-base font-bold text-gray-900 mb-1 uppercase">{rv.name}</h3>
+            )}
+            {/* Stock Number, Location, and Distance on same line */}
             {rv.stock && rv.stock !== 'N/A' && (
-              <p className="text-xs text-gray-500 mb-1">Stock #{rv.stock}</p>
+              <p className="text-xs text-gray-500 mb-1">
+                Stock #{rv.stock}
+                {locationDisplay && ` • ${locationDisplay}`}
+                {distanceInMiles !== null && distanceInMiles !== undefined && (
+                  <span className="text-blue-600 font-semibold"> ({distanceInMiles} mi)</span>
+                )}
+              </p>
             )}
             <p className="text-sm text-gray-600">
               {rv.year} • {typeDescription || rv.type}
-              {locationDisplay && ` • ${locationDisplay}`}
             </p>
           </div>
           <div className="bg-red-100 text-red-700 px-3 py-1 rounded text-xs font-bold">
@@ -229,12 +237,23 @@ export default function RVCard({
           >
             Buy Now
           </button>
-          <button 
-            onClick={() => onViewDetails?.(rv)}
-            className="px-4 py-2 border-2 border-slate-700 text-slate-700 font-semibold rounded-lg hover:bg-slate-50 transition-colors"
-          >
-            Details
-          </button>
+          {detailUrl ? (
+            <a 
+              href={detailUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-4 py-2 border-2 border-slate-700 text-slate-700 font-semibold rounded-lg hover:bg-slate-50 transition-colors text-center"
+            >
+              Details
+            </a>
+          ) : (
+            <button 
+              onClick={() => onViewDetails?.(rv)}
+              className="px-4 py-2 border-2 border-slate-700 text-slate-700 font-semibold rounded-lg hover:bg-slate-50 transition-colors"
+            >
+              Details
+            </button>
+          )}
         </div>
       </div>
     </div>

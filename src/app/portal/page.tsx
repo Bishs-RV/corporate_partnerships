@@ -7,6 +7,7 @@ import { RV } from '@/types/inventory';
 import RVCard from '@/components/RVCard';
 import Slider from 'rc-slider';
 import 'rc-slider/assets/index.css';
+import { getCoordinatesFromZip, calculateDistance, getCachedCoordinates, cacheCoordinates } from '@/lib/distance';
 
 export default function PortalPage() {
   const router = useRouter();
@@ -21,9 +22,15 @@ export default function PortalPage() {
   const [isLoadingInventory, setIsLoadingInventory] = useState(false);
   
   // Location and class options from database
-  const [locations, setLocations] = useState<Array<{ cmf: number; location: string; storename: string }>>([]);
+  const [locations, setLocations] = useState<Array<{ cmf: number; location: string; storename: string; zipcode: string | null; latitude: number | null; longitude: number | null }>>([]);
   const [unitClasses, setUnitClasses] = useState<Array<{ class_id: number; class: string; class_description: string | null }>>([]);
   const [isLoadingOptions, setIsLoadingOptions] = useState(true);
+  
+  // User location state for distance calculations
+  const [userZip, setUserZip] = useState<string>('');
+  const [userCoordinates, setUserCoordinates] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [isGeocodingZip, setIsGeocodingZip] = useState(false);
+  const [locationDistances, setLocationDistances] = useState<Map<number, number>>(new Map());
   
   // Price filter state
   const [minPrice, setMinPrice] = useState<number>(0);
@@ -37,8 +44,11 @@ export default function PortalPage() {
   // Sleeps filter state
   const [minSleeps, setMinSleeps] = useState<number>(0);
   
+  // Distance filter state
+  const [maxDistance, setMaxDistance] = useState<number>(10000); // Default to no limit (10000 miles)
+  
   // Sort state
-  const [sortBy, setSortBy] = useState<'price-asc' | 'price-desc' | 'discount-desc'>('price-asc');
+  const [sortBy, setSortBy] = useState<'price-asc' | 'price-desc' | 'discount-desc' | 'distance-asc'>('price-asc');
 
   // Fetch locations and unit classes on mount
   useEffect(() => {
@@ -88,10 +98,8 @@ export default function PortalPage() {
           params.append('locationIds', selectedLocation);
         }
         
-        // Add class filter if any types selected
-        if (selectedTypes.length > 0) {
-          params.append('classNames', selectedTypes.join(','));
-        }
+        // Don't filter by type in API - we'll do that client-side
+        // This ensures all types are available in the dropdown
         
         const url = `/api/inventory${params.toString() ? `?${params.toString()}` : ''}`;
         const response = await fetch(url);
@@ -111,7 +119,67 @@ export default function PortalPage() {
     }
     
     fetchInventory();
-  }, [selectedTypes, selectedLocation, locations, isLoadingOptions]);
+  }, [selectedLocation, locations, isLoadingOptions]);
+
+  // Handle zip code changes and geocoding
+  const handleZipCodeChange = async (zip: string) => {
+    if (zip.length !== 5) return;
+    
+    setIsGeocodingZip(true);
+    
+    try {
+      // Check cache first
+      const cached = getCachedCoordinates(zip);
+      if (cached) {
+        setUserCoordinates(cached);
+        calculateDistancesToLocations(cached);
+        setIsGeocodingZip(false);
+        return;
+      }
+      
+      // Geocode the zip
+      const coords = await getCoordinatesFromZip(zip);
+      if (coords) {
+        setUserCoordinates(coords);
+        cacheCoordinates(zip, coords);
+        calculateDistancesToLocations(coords);
+      } else {
+        console.warn('Could not geocode zip code:', zip);
+        setUserCoordinates(null);
+        setLocationDistances(new Map());
+      }
+    } catch (error) {
+      console.error('Error geocoding zip code:', error);
+      setUserCoordinates(null);
+      setLocationDistances(new Map());
+    } finally {
+      setIsGeocodingZip(false);
+    }
+  };
+  
+  // Calculate distances to all locations using database coordinates
+  const calculateDistancesToLocations = (userCoords: { latitude: number; longitude: number }) => {
+    const distances = new Map<number, number>();
+    
+    for (const location of locations) {
+      // Use coordinates directly from database - no geocoding needed!
+      if (location.latitude !== null && location.longitude !== null) {
+        try {
+          const distance = calculateDistance(
+            userCoords.latitude,
+            userCoords.longitude,
+            location.latitude,
+            location.longitude
+          );
+          distances.set(location.cmf, distance);
+        } catch (error) {
+          console.error(`Error calculating distance for location ${location.cmf}:`, error);
+        }
+      }
+    }
+    
+    setLocationDistances(distances);
+  };
 
   useEffect(() => {
     // Check if user is verified
@@ -167,14 +235,22 @@ export default function PortalPage() {
   const KIEWIT_DISCOUNT_PERCENT = 0.15;
   const calculateDiscountedPrice = (price: number) => Math.round(price * (1 - KIEWIT_DISCOUNT_PERCENT));
   
-  // Client-side price and sleeps filtering
+  // Client-side filtering (type, price, sleeps, and distance)
   const filteredInventory = inventory.filter(rv => {
     // Exclude RVs with no price (0 or null)
     if (!rv.price || rv.price <= 0) return false;
+    // Filter by RV type
+    if (selectedTypes.length > 0 && !selectedTypes.includes(rv.type)) return false;
+    // Filter by price
     if (minPrice > 0 && rv.price < minPrice) return false;
     if (maxPrice < 200000 && rv.price > maxPrice) return false;
     // Filter by sleeps
     if (minSleeps > 0 && rv.sleeps < minSleeps) return false;
+    // Filter by distance (if user has entered a zip code)
+    if (userCoordinates && maxDistance < 10000 && rv.cmfId) {
+      const distance = locationDistances.get(rv.cmfId);
+      if (distance !== undefined && distance > maxDistance) return false;
+    }
     return true;
   });
   
@@ -188,6 +264,15 @@ export default function PortalPage() {
       const savingsA = a.price * KIEWIT_DISCOUNT_PERCENT;
       const savingsB = b.price * KIEWIT_DISCOUNT_PERCENT;
       return savingsB - savingsA;
+    } else if (sortBy === 'distance-asc') {
+      // Sort by distance (closest first)
+      const distanceA = a.cmfId ? locationDistances.get(a.cmfId) : undefined;
+      const distanceB = b.cmfId ? locationDistances.get(b.cmfId) : undefined;
+      // Put items without distance at the end
+      if (distanceA === undefined && distanceB === undefined) return 0;
+      if (distanceA === undefined) return 1;
+      if (distanceB === undefined) return -1;
+      return distanceA - distanceB;
     }
     return 0;
   });
@@ -196,7 +281,9 @@ export default function PortalPage() {
   const totalDiscountedPrice = sortedInventory.reduce((sum, rv) => sum + calculateDiscountedPrice(rv.price), 0);
   const totalSavings = totalRegularPrice - totalDiscountedPrice;
   
-  // Filter unit classes to only show those with inventory
+  // Filter unit classes to only show those that have RVs in the current location(s)
+  // Use the fetched inventory which already respects location filter but may be filtered by type
+  // We want to show all types that exist in the location, regardless of current type selection
   const availableUnitClasses = unitClasses.filter(unitClass => 
     inventory.some(rv => rv.type === unitClass.class)
   );
@@ -222,62 +309,103 @@ export default function PortalPage() {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white shadow-sm sticky top-0 z-50">
-        <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex items-center justify-between">
-          <div className="flex items-center gap-6">
+        <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-4">
             <Image
               src="/bishs_logo.jpg"
               alt="Bishs Logo"
-              width={80}
-              height={80}
+              width={60}
+              height={60}
             />
-            <div className="hidden sm:block border-l-2 border-gray-200 h-16"></div>
+            <div className="hidden sm:block border-l-2 border-gray-200 h-12"></div>
             <Image
               src="/Kiewit-Logo.png"
               alt="Kiewit Logo"
-              width={100}
-              height={50}
+              width={80}
+              height={40}
               className="object-contain"
             />
           </div>
-          <button
-            onClick={handleLogout}
-            className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            Logout
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleLogout}
+              className="px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              Logout
+            </button>
+          </div>
         </nav>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {/* Welcome Section */}
-        <div className="mb-12">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">
-            Welcome to Bishs RV Portal
+        <div className="mb-4">
+          <h1 className="text-2xl font-bold text-gray-900 mb-1">
+            Bishs RV Portal • <span className="text-blue-600">Kiewit Exclusive</span>
           </h1>
-          <p className="text-lg text-gray-600 mb-4">
-            Kiewit Employee Exclusive Pricing
-          </p>
-          <p className="text-gray-600 mb-2">
+          <p className="text-sm text-gray-600">
             {userEmail}
-          </p>
-          <p className="text-gray-600">
-            Browse our exclusive curated selection of RVs available at special Kiewit employee pricing.
           </p>
         </div>
 
+        {/* Zip Code Input Section */}
+        <div className="mb-4 flex justify-end">
+          <div className="text-right">
+            <p className="text-xs text-gray-600 mb-2">Your zip code will determine the price to ship the RV to your house</p>
+            <div className="flex items-center justify-end gap-2">
+              <input
+                type="text"
+                placeholder="Enter ZIP Code"
+                value={userZip}
+                onChange={(e) => {
+                  const zip = e.target.value.replace(/\D/g, '').slice(0, 5);
+                  setUserZip(zip);
+                }}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter' && userZip.length === 5) {
+                    handleZipCodeChange(userZip);
+                  }
+                }}
+                className="w-36 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:border-slate-600 focus:ring-1 focus:ring-slate-200 focus:outline-none"
+                maxLength={5}
+              />
+              <button
+                onClick={() => {
+                  if (userZip.length === 5) {
+                    handleZipCodeChange(userZip);
+                  }
+                }}
+                disabled={userZip.length !== 5 || isGeocodingZip}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+              >
+                {isGeocodingZip ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+                    </svg>
+                    Calculating...
+                  </>
+                ) : (
+                  'Calculate Distance'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+
         {/* Benefits Banner */}
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-8">
-          <h2 className="text-xl font-bold text-blue-900 mb-2">Your Exclusive Benefits</h2>
-          <p className="text-blue-800">
-            Enjoy <strong>15% off</strong> all RVs with your Kiewit employee discount. {filteredInventory.length > 0 && <span>Save up to <strong>${(Math.max(...filteredInventory.map(rv => rv.price * KIEWIT_DISCOUNT_PERCENT))).toLocaleString()}</strong> per vehicle.</span>}
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+          <p className="text-sm text-blue-800">
+            <strong>Your Benefits:</strong> 15% off MSRP + 0% financing for 120 months. {filteredInventory.length > 0 && <span>Save up to <strong>${(Math.max(...filteredInventory.map(rv => rv.price * KIEWIT_DISCOUNT_PERCENT))).toLocaleString()}</strong> per vehicle.</span>}
           </p>
         </div>
 
         {/* Filter and Pagination Controls */}
-        <div className="mb-8 space-y-6">
+        <div className="mb-4 space-y-4">
           {/* Filters */}
-          <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-            <div className="flex items-center justify-between mb-6">
+          <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+            <div className="flex items-center justify-between mb-2">
               <h2 className="text-2xl font-bold text-gray-900">Filters</h2>
               {(selectedTypes.length > 0 || selectedLocation !== 'all' || priceMin || priceMax || minSleeps > 0) && (
                 <button
@@ -297,17 +425,17 @@ export default function PortalPage() {
               )}
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="flex justify-between items-end">
               {/* Location Filter */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-3">
+              <div className="flex-shrink-0">
+                <label className="block text-xs font-semibold text-gray-700 mb-1.5">
                   Location
                 </label>
                 <div className="relative">
                   <select
                     value={selectedLocation}
                     onChange={(e) => setSelectedLocation(e.target.value)}
-                    className="w-full appearance-none px-4 py-3 pr-10 bg-white border-2 border-gray-200 rounded-xl text-gray-900 font-medium focus:border-slate-600 focus:ring-2 focus:ring-slate-200 focus:outline-none transition-all hover:border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-48 appearance-none px-3 py-2 pr-8 bg-white border border-gray-300 rounded-lg text-sm text-gray-900 focus:border-slate-600 focus:ring-1 focus:ring-slate-200 focus:outline-none transition-all hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
                     disabled={isLoadingInventory || isLoadingOptions}
                   >
                     <option value="all">All Locations</option>
@@ -326,15 +454,15 @@ export default function PortalPage() {
               </div>
 
               {/* RV Type Filter */}
-              <div className="relative">
-                <label className="block text-sm font-semibold text-gray-700 mb-3">
-                  RV Type {selectedTypes.length > 0 && <span className="text-blue-600">({selectedTypes.length})</span>}
+              <div className="relative flex-shrink-0">
+                <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                  RV Type {selectedTypes.length > 0 && <span className="text-blue-600 text-xs">({selectedTypes.length})</span>}
                 </label>
                 <div className="relative">
                   <button
                     onClick={() => setIsRvTypeDropdownOpen(!isRvTypeDropdownOpen)}
                     disabled={isLoadingOptions || isLoadingInventory}
-                    className="w-full px-4 py-3 pr-10 bg-white border-2 border-gray-200 rounded-xl text-left font-medium focus:border-slate-600 focus:ring-2 focus:ring-slate-200 focus:outline-none transition-all hover:border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-56 px-3 py-2 pr-8 bg-white border border-gray-300 rounded-lg text-left text-sm focus:border-slate-600 focus:ring-1 focus:ring-slate-200 focus:outline-none transition-all hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <span className="text-gray-900">
                       {selectedTypes.length === 0 
@@ -357,14 +485,17 @@ export default function PortalPage() {
                   {/* Dropdown Menu */}
                   {isRvTypeDropdownOpen && (
                     <>
-                      {/* Backdrop to close dropdown */}
+                      {/* Backdrop to close dropdown when clicking outside */}
                       <div 
                         className="fixed inset-0 z-10" 
                         onClick={() => setIsRvTypeDropdownOpen(false)}
                       />
                       
                       {/* Dropdown Content */}
-                      <div className="absolute z-20 mt-2 w-full bg-white border-2 border-gray-200 rounded-xl shadow-lg max-h-80 overflow-y-auto">
+                      <div 
+                        className="absolute z-20 mt-2 w-full bg-white border-2 border-gray-200 rounded-xl shadow-lg max-h-80 overflow-y-auto"
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         {isLoadingOptions ? (
                           <div className="flex items-center gap-2 text-sm text-gray-500 p-4">
                             <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
@@ -385,17 +516,20 @@ export default function PortalPage() {
                                       ? 'bg-blue-50 text-blue-900'
                                       : 'hover:bg-gray-50 text-gray-700'
                                   }`}
+                                  onClick={(e) => e.stopPropagation()}
                                 >
                                   <input
                                     type="checkbox"
                                     checked={isSelected}
-                                    onChange={() => {
+                                    onChange={(e) => {
+                                      e.stopPropagation();
                                       if (isSelected) {
                                         setSelectedTypes(selectedTypes.filter(t => t !== unitClass.class));
                                       } else {
                                         setSelectedTypes([...selectedTypes, unitClass.class]);
                                       }
                                     }}
+                                    onClick={(e) => e.stopPropagation()}
                                     className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
                                   />
                                   <span className="flex-1 font-medium text-sm">
@@ -426,15 +560,15 @@ export default function PortalPage() {
               </div>
 
               {/* Price Filter */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-3">
+              <div className="flex-shrink-0" style={{width: '180px'}}>
+                <label className="block text-xs font-semibold text-gray-700 mb-1.5">
                   Price Range
                 </label>
-                <div className="space-y-4">
+                <div className="space-y-2">
                   {/* Price Range Slider */}
                   <div className="px-2">
                     <div className="relative pt-1">
-                      <div className="flex mb-2 items-center justify-between text-xs text-gray-600">
+                      <div className="flex mb-1 items-center justify-between text-[10px] text-gray-600">
                         <span>${minPrice.toLocaleString()}</span>
                         <span>${maxPrice.toLocaleString()}</span>
                       </div>
@@ -455,20 +589,20 @@ export default function PortalPage() {
                           }}
                           styles={{
                             track: {
-                              backgroundColor: '#475569', // slate-600
-                              height: 8,
+                              backgroundColor: '#475569',
+                              height: 6,
                             },
                             rail: {
-                              backgroundColor: '#e5e7eb', // gray-200
-                              height: 8,
+                              backgroundColor: '#e5e7eb',
+                              height: 6,
                             },
                             handle: {
-                              backgroundColor: '#475569', // slate-600
+                              backgroundColor: '#475569',
                               borderColor: '#475569',
                               opacity: 1,
-                              width: 18,
-                              height: 18,
-                              marginTop: -5,
+                              width: 14,
+                              height: 14,
+                              marginTop: -4,
                             },
                           }}
                         />
@@ -477,13 +611,13 @@ export default function PortalPage() {
                   </div>
 
                   {/* Price Input Fields */}
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">
+                      <label className="block text-[10px] font-medium text-gray-600 mb-0.5">
                         Min Price
                       </label>
                       <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-medium">$</span>
+                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500 text-xs">$</span>
                         <input
                           type="number"
                           value={priceMin}
@@ -500,16 +634,16 @@ export default function PortalPage() {
                             }
                           }}
                           placeholder="0"
-                          className="w-full pl-7 pr-3 py-2 border-2 border-gray-200 rounded-lg focus:border-slate-600 focus:ring-2 focus:ring-slate-200 focus:outline-none transition-all"
+                          className="w-full pl-5 pr-2 py-1.5 text-xs border border-gray-300 rounded-lg focus:border-slate-600 focus:ring-1 focus:ring-slate-200 focus:outline-none transition-all"
                         />
                       </div>
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">
+                      <label className="block text-[10px] font-medium text-gray-600 mb-0.5">
                         Max Price
                       </label>
                       <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-medium">$</span>
+                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500 text-xs">$</span>
                         <input
                           type="number"
                           value={priceMax}
@@ -526,7 +660,7 @@ export default function PortalPage() {
                             }
                           }}
                           placeholder="200000"
-                          className="w-full pl-7 pr-3 py-2 border-2 border-gray-200 rounded-lg focus:border-slate-600 focus:ring-2 focus:ring-slate-200 focus:outline-none transition-all"
+                          className="w-full pl-5 pr-2 py-1.5 text-xs border border-gray-300 rounded-lg focus:border-slate-600 focus:ring-1 focus:ring-slate-200 focus:outline-none transition-all"
                         />
                       </div>
                     </div>
@@ -535,14 +669,14 @@ export default function PortalPage() {
               </div>
 
               {/* Sleeps Filter */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-3">
+              <div className="flex-shrink-0">
+                <label className="block text-xs font-semibold text-gray-700 mb-1.5">
                   Minimum Sleeps
                 </label>
                 <select
                   value={minSleeps}
                   onChange={(e) => setMinSleeps(Number(e.target.value))}
-                  className="w-full appearance-none px-4 py-3 pr-10 bg-white border-2 border-gray-200 rounded-xl text-gray-900 font-medium focus:border-slate-600 focus:ring-2 focus:ring-slate-200 focus:outline-none transition-all hover:border-gray-300"
+                  className="w-36 appearance-none px-3 py-2 pr-8 bg-white border border-gray-300 rounded-lg text-sm text-gray-900 focus:border-slate-600 focus:ring-1 focus:ring-slate-200 focus:outline-none transition-all hover:border-gray-400"
                   disabled={isLoadingInventory}
                 >
                   <option value={0}>Any</option>
@@ -553,6 +687,28 @@ export default function PortalPage() {
                   <option value={10}>10+</option>
                 </select>
               </div>
+
+              {/* Distance Filter - Only show when user has entered zip code */}
+              {userCoordinates && (
+                <div className="flex-shrink-0">
+                  <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                    Distance from Me
+                  </label>
+                  <select
+                    value={maxDistance}
+                    onChange={(e) => setMaxDistance(Number(e.target.value))}
+                    className="w-44 appearance-none px-3 py-2 pr-8 bg-white border border-gray-300 rounded-lg text-sm text-gray-900 focus:border-slate-600 focus:ring-1 focus:ring-slate-200 focus:outline-none transition-all hover:border-gray-400"
+                    disabled={isLoadingInventory}
+                  >
+                    <option value={10000}>Any Distance</option>
+                    <option value={50}>Within 50 miles</option>
+                    <option value={100}>Within 100 miles</option>
+                    <option value={250}>Within 250 miles</option>
+                    <option value={500}>Within 500 miles</option>
+                    <option value={1000}>Within 1,000 miles</option>
+                  </select>
+                </div>
+              )}
             </div>
             
             {isLoadingInventory && (
@@ -581,6 +737,7 @@ export default function PortalPage() {
                 <option value="price-asc">Price: Low to High</option>
                 <option value="price-desc">Price: High to Low</option>
                 <option value="discount-desc">Highest Discount</option>
+                {userCoordinates && <option value="distance-asc">Distance (Nearest)</option>}
               </select>
             </div>
             
@@ -616,12 +773,17 @@ export default function PortalPage() {
             // Find the full RV type description
             const rvTypeDescription = unitClasses.find(uc => uc.class === rv.type)?.class_description || undefined;
             
+            // Get distance for this RV's location
+            const distance = rv.cmfId ? locationDistances.get(rv.cmfId) : null;
+            
             return (
               <RVCard
                 key={rv.id}
                 rv={rv}
                 discountPercent={KIEWIT_DISCOUNT_PERCENT}
                 typeDescription={rvTypeDescription}
+                locations={locations}
+                distanceInMiles={distance}
                 onBuyNow={(rv) => {
                   // TODO: Implement buy now functionality
                   console.log('Buy now clicked for:', rv);
@@ -643,6 +805,10 @@ export default function PortalPage() {
                 onClick={() => {
                   setSelectedTypes([]);
                   setSelectedLocation('all');
+                  setMinPrice(0);
+                  setMaxPrice(200000);
+                  setMinSleeps(0);
+                  setMaxDistance(10000);
                 }}
                 className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
               >

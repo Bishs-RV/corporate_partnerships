@@ -86,6 +86,7 @@ export interface RV {
   blackTankCapacity: number;
   uvw: number; // Unloaded Vehicle Weight
   location: string;
+  cmfId: number | null; // Location ID for looking up full location name
 }
 
 // Transform database row to UI RV type
@@ -137,5 +138,6 @@ export function transformInventoryToRV(row: DatabaseInventoryRow): RV {
     blackTankCapacity: row.black_tank_capacity ? parseFloat(row.black_tank_capacity) : 0,
     uvw: row.uvwr ? parseFloat(row.uvwr) : 0,
     location: row.location || '',
+    cmfId: row.cmf_id,
   };
 }

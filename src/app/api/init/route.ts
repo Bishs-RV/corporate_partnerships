@@ -5,6 +5,9 @@ interface Location {
   cmf: number;
   location: string;
   storename: string;
+  zipcode: string | null;
+  latitude: number | null;
+  longitude: number | null;
 }
 
 interface UnitClass {
@@ -19,7 +22,7 @@ export async function GET() {
 
     // Fetch locations and unit classes in parallel
     const [locationsResult, classesResult] = await Promise.all([
-      // Get locations from location_detail table
+      // Get locations from location_detail table with coordinates
       pool.query<Location>(`
         SELECT
           cmf::INTEGER,
@@ -27,7 +30,16 @@ export async function GET() {
           CASE
             WHEN storename = 'RVFix' THEN 'Corp'
             ELSE storename
-          END AS storename
+          END AS storename,
+          SUBSTRING(address FROM '\d{5}$') as zipcode,
+          CASE 
+            WHEN lat ~ '^[0-9.\-]+$' THEN lat::DOUBLE PRECISION
+            ELSE NULL 
+          END as latitude,
+          CASE 
+            WHEN lon ~ '^[0-9.\-]+$' THEN lon::DOUBLE PRECISION
+            ELSE NULL 
+          END as longitude
         FROM location_detail
         WHERE location NOT IN('GMI', 'POC', 'COR')
         ORDER BY location ASC

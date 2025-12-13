@@ -80,5 +80,15 @@ export function hasImages(stockNumber: string): boolean {
   return imageData !== undefined && imageData.images.length > 0;
 }
 
+/**
+ * Get the detail page URL for an RV
+ * @param stockNumber The RV stock number
+ * @returns Detail URL or undefined if not found
+ */
+export function getDetailUrl(stockNumber: string): string | undefined {
+  const imageData = getRVImages(stockNumber);
+  return imageData?.itemDetailUrl;
+}
+
 // Export the raw mapping for advanced use cases
 export { imageMapping };
