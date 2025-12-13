@@ -1,0 +1,16 @@
+<svg width="400" height="300" viewBox="0 0 400 300" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Light gray background -->
+  <rect width="400" height="300" fill="#E5E7EB"/>
+  
+  <!-- Picture frame icon -->
+  <g transform="translate(100, 75)">
+    <!-- Frame border -->
+    <rect x="0" y="0" width="200" height="150" rx="6" fill="none" stroke="#9CA3AF" stroke-width="8"/>
+    
+    <!-- Mountain/landscape -->
+    <path d="M20 110 L60 70 L100 100 L140 60 L180 110 L180 130 L20 130 Z" fill="#9CA3AF"/>
+    
+    <!-- Sun/circle -->
+    <circle cx="160" cy="40" r="15" fill="#9CA3AF"/>
+  </g>
+</svg>

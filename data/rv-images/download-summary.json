@@ -1,0 +1,164 @@
+{
+  "successful": [
+    {
+      "lotId": 231,
+      "locationName": "great-falls",
+      "unitCount": 185,
+      "size": 2705332
+    },
+    {
+      "lotId": 1999,
+      "locationName": "location-1999",
+      "unitCount": 181,
+      "size": 3009349
+    },
+    {
+      "lotId": 1225,
+      "locationName": "location-1225",
+      "unitCount": 400,
+      "size": 5165932
+    },
+    {
+      "lotId": 1011,
+      "locationName": "location-1011",
+      "unitCount": 121,
+      "size": 1460976
+    },
+    {
+      "lotId": 1012,
+      "locationName": "location-1012",
+      "unitCount": 267,
+      "size": 4442621
+    },
+    {
+      "lotId": 1304,
+      "locationName": "location-1304",
+      "unitCount": 534,
+      "size": 8047690
+    },
+    {
+      "lotId": 1340,
+      "locationName": "location-1340",
+      "unitCount": 196,
+      "size": 3049459
+    },
+    {
+      "lotId": 1274,
+      "locationName": "location-1274",
+      "unitCount": 344,
+      "size": 6580835
+    },
+    {
+      "lotId": 1275,
+      "locationName": "location-1275",
+      "unitCount": 380,
+      "size": 6031843
+    },
+    {
+      "lotId": 1277,
+      "locationName": "location-1277",
+      "unitCount": 385,
+      "size": 5819359
+    },
+    {
+      "lotId": 1278,
+      "locationName": "location-1278",
+      "unitCount": 622,
+      "size": 8827239
+    },
+    {
+      "lotId": 1279,
+      "locationName": "location-1279",
+      "unitCount": 244,
+      "size": 3168373
+    },
+    {
+      "lotId": 1280,
+      "locationName": "location-1280",
+      "unitCount": 190,
+      "size": 2664572
+    },
+    {
+      "lotId": 1281,
+      "locationName": "location-1281",
+      "unitCount": 240,
+      "size": 3599687
+    },
+    {
+      "lotId": 1282,
+      "locationName": "location-1282",
+      "unitCount": 212,
+      "size": 3148058
+    },
+    {
+      "lotId": 1283,
+      "locationName": "location-1283",
+      "unitCount": 559,
+      "size": 8678305
+    },
+    {
+      "lotId": 1284,
+      "locationName": "location-1284",
+      "unitCount": 290,
+      "size": 4344955
+    },
+    {
+      "lotId": 1285,
+      "locationName": "location-1285",
+      "unitCount": 228,
+      "size": 3203170
+    },
+    {
+      "lotId": 1286,
+      "locationName": "location-1286",
+      "unitCount": 206,
+      "size": 2735481
+    },
+    {
+      "lotId": 1287,
+      "locationName": "location-1287",
+      "unitCount": 143,
+      "size": 2986408
+    },
+    {
+      "lotId": 1448,
+      "locationName": "location-1448",
+      "unitCount": 155,
+      "size": 2040118
+    },
+    {
+      "lotId": 1527,
+      "locationName": "location-1527",
+      "unitCount": 365,
+      "size": 6489184
+    },
+    {
+      "lotId": 1492,
+      "locationName": "location-1492",
+      "unitCount": 189,
+      "size": 3198718
+    },
+    {
+      "lotId": 2303,
+      "locationName": "location-2303",
+      "unitCount": 159,
+      "size": 1786950
+    }
+  ],
+  "failed": [
+    {
+      "lotId": 1899,
+      "error": "Unexpected end of JSON input"
+    },
+    {
+      "lotId": 1276,
+      "error": "Unexpected end of JSON input"
+    },
+    {
+      "lotId": 1367,
+      "error": "Unexpected end of JSON input"
+    }
+  ],
+  "totalUnits": 6795,
+  "totalSize": 103184614
+}
