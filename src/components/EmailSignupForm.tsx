@@ -112,7 +112,7 @@ export default function EmailSignupForm() {
         <button
           type="submit"
           disabled={loading || !email}
-          className="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors duration-200"
+          className="px-6 py-3 bg-[#B43732] text-white text-xs font-bold uppercase tracking-wide rounded hover:bg-[#9A2F2B] disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
         >
           {loading ? 'Processing...' : 'Get Access to Bishs Inventory'}
         </button>

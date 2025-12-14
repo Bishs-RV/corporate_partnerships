@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import Image from 'next/image';
+import Link from 'next/link';
 import { RV } from '@/types/inventory';
 import { getPrimaryImage, getAllImages, getDetailUrl } from '@/lib/rvImages';
 
@@ -90,7 +91,7 @@ export default function RVCard({
 
   return (
     <>
-      <div className="bg-white rounded-lg shadow hover:shadow-lg transition-shadow overflow-hidden">
+      <div className="bg-white rounded-lg shadow hover:shadow-lg transition-shadow overflow-hidden flex flex-col h-full">
         {/* Image Section with Mini Gallery */}
         <div 
           className={`bg-gray-200 h-48 flex items-center justify-center relative group ${hasImages ? 'cursor-pointer' : ''}`}
@@ -145,7 +146,7 @@ export default function RVCard({
         </div>
 
       {/* Content Section */}
-      <div className="p-6">
+      <div className="p-6 flex flex-col flex-1">
         {/* Header with Discount Badge */}
         <div className="flex justify-between items-start mb-3">
           <div className="flex-1">
@@ -230,28 +231,36 @@ export default function RVCard({
         </div>
 
         {/* Action Buttons */}
-        <div className="grid grid-cols-2 gap-3">
-          <button 
-            onClick={() => onBuyNow?.(rv)}
-            className="px-4 py-2 bg-slate-700 text-white font-semibold rounded-lg hover:bg-slate-800 transition-colors"
+        <div className="grid grid-cols-2 gap-2 mt-auto">
+          <Link
+            href={`/portal/purchase/${rv.stock}`}
+            className="px-6 py-3 bg-[#B43732] text-white text-xs font-bold uppercase tracking-wide rounded hover:bg-[#9A2F2B] transition-colors text-center"
           >
             Buy Now
-          </button>
+          </Link>
           {detailUrl ? (
             <a 
               href={detailUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="px-4 py-2 border-2 border-slate-700 text-slate-700 font-semibold rounded-lg hover:bg-slate-50 transition-colors text-center"
+              className="px-6 py-3 bg-[#1A1A1A] text-white text-xs font-bold uppercase tracking-wide rounded hover:bg-black transition-colors text-center relative"
             >
-              Details
+              Learn More
+              <svg 
+                className="w-3 h-3 inline-block ml-1 absolute top-1 right-1" 
+                fill="none" 
+                stroke="currentColor" 
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              </svg>
             </a>
           ) : (
             <button 
               onClick={() => onViewDetails?.(rv)}
-              className="px-4 py-2 border-2 border-slate-700 text-slate-700 font-semibold rounded-lg hover:bg-slate-50 transition-colors"
+              className="px-6 py-3 bg-[#1A1A1A] text-white text-xs font-bold uppercase tracking-wide rounded hover:bg-black transition-colors"
             >
-              Details
+              Learn More
             </button>
           )}
         </div>

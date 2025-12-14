@@ -47,8 +47,17 @@ export default function PortalPage() {
   // Distance filter state
   const [maxDistance, setMaxDistance] = useState<number>(10000); // Default to no limit (10000 miles)
   
+  // Manufacturer filter state - default to BRINKLEY RV
+  const [selectedManufacturers, setSelectedManufacturers] = useState<string[]>(['BRINKLEY RV']);
+  
   // Sort state
   const [sortBy, setSortBy] = useState<'price-asc' | 'price-desc' | 'discount-desc' | 'distance-asc'>('price-asc');
+  
+  // Mobile filter menu state
+  const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
+  
+  // Manufacturer dropdown state
+  const [isManufacturerDropdownOpen, setIsManufacturerDropdownOpen] = useState(false);
 
   // Fetch locations and unit classes on mount
   useEffect(() => {
@@ -143,6 +152,8 @@ export default function PortalPage() {
         setUserCoordinates(coords);
         cacheCoordinates(zip, coords);
         calculateDistancesToLocations(coords);
+        // Save zip code to localStorage for use on purchase page
+        localStorage.setItem('userZip', zip);
       } else {
         console.warn('Could not geocode zip code:', zip);
         setUserCoordinates(null);
@@ -235,10 +246,20 @@ export default function PortalPage() {
   const KIEWIT_DISCOUNT_PERCENT = 0.15;
   const calculateDiscountedPrice = (price: number) => Math.round(price * (1 - KIEWIT_DISCOUNT_PERCENT));
   
-  // Client-side filtering (type, price, sleeps, and distance)
+  // Get unique manufacturers from inventory
+  const uniqueManufacturers = Array.from(new Set(inventory.map(rv => rv.manufacturer).filter(Boolean))).sort();
+  
+  // Log manufacturers for debugging (can be removed later)
+  if (uniqueManufacturers.length > 0 && !isLoadingInventory) {
+    console.log('Available manufacturers:', uniqueManufacturers);
+  }
+  
+  // Client-side filtering (type, price, sleeps, manufacturer, and distance)
   const filteredInventory = inventory.filter(rv => {
     // Exclude RVs with no price (0 or null)
     if (!rv.price || rv.price <= 0) return false;
+    // Filter by manufacturer
+    if (selectedManufacturers.length > 0 && !selectedManufacturers.includes(rv.manufacturer)) return false;
     // Filter by RV type
     if (selectedTypes.length > 0 && !selectedTypes.includes(rv.type)) return false;
     // Filter by price
@@ -405,27 +426,141 @@ export default function PortalPage() {
         <div className="mb-4 space-y-4">
           {/* Filters */}
           <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-            <div className="flex items-center justify-between mb-2">
-              <h2 className="text-2xl font-bold text-gray-900">Filters</h2>
-              {(selectedTypes.length > 0 || selectedLocation !== 'all' || priceMin || priceMax || minSleeps > 0) && (
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-xl font-bold text-gray-900">Filters</h2>
+              <div className="flex items-center gap-2">
+                {(selectedTypes.length > 0 || selectedLocation !== 'all' || priceMin || priceMax || minSleeps > 0 || selectedManufacturers.length > 0) && (
+                  <button
+                    onClick={() => {
+                      setSelectedTypes([]);
+                      setSelectedLocation('all');
+                      setPriceMin('');
+                      setPriceMax('');
+                      setMinPrice(0);
+                      setMaxPrice(200000);
+                      setMinSleeps(0);
+                      setSelectedManufacturers([]);
+                    }}
+                    className="text-sm font-medium text-slate-600 hover:text-slate-700"
+                  >
+                    Clear All
+                  </button>
+                )}
+                {/* Mobile hamburger menu button */}
                 <button
-                  onClick={() => {
-                    setSelectedTypes([]);
-                    setSelectedLocation('all');
-                    setPriceMin('');
-                    setPriceMax('');
-                    setMinPrice(0);
-                    setMaxPrice(200000);
-                    setMinSleeps(0);
-                  }}
-                  className="text-sm font-medium text-slate-600 hover:text-slate-700"
+                  onClick={() => setIsFilterMenuOpen(!isFilterMenuOpen)}
+                  className="lg:hidden p-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                  aria-label="Toggle filters"
                 >
-                  Clear All
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    {isFilterMenuOpen ? (
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    ) : (
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                    )}
+                  </svg>
                 </button>
-              )}
+              </div>
             </div>
             
-            <div className="flex justify-between items-end">
+            {/* Desktop filters - always visible on large screens */}
+            <div className="hidden lg:flex justify-between items-end gap-4">
+              {/* Manufacturer Filter */}
+              <div className="relative flex-shrink-0">
+                <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                  Manufacturer {selectedManufacturers.length > 0 && <span className="text-blue-600 text-xs">({selectedManufacturers.length})</span>}
+                </label>
+                <div className="relative">
+                  <button
+                    onClick={() => setIsManufacturerDropdownOpen(!isManufacturerDropdownOpen)}
+                    disabled={isLoadingInventory}
+                    className="w-56 px-3 py-2 pr-8 bg-white border border-gray-300 rounded-lg text-left text-sm focus:border-slate-600 focus:ring-1 focus:ring-slate-200 focus:outline-none transition-all hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <span className="text-gray-900">
+                      {selectedManufacturers.length === 0 
+                        ? 'All Manufacturers' 
+                        : `${selectedManufacturers.length} manufacturer${selectedManufacturers.length > 1 ? 's' : ''} selected`
+                      }
+                    </span>
+                  </button>
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-500">
+                    <svg 
+                      className={`h-5 w-5 transition-transform ${isManufacturerDropdownOpen ? 'rotate-180' : ''}`} 
+                      fill="none" 
+                      stroke="currentColor" 
+                      viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                  
+                  {/* Dropdown Menu */}
+                  {isManufacturerDropdownOpen && (
+                    <>
+                      {/* Backdrop to close dropdown when clicking outside */}
+                      <div 
+                        className="fixed inset-0 z-10" 
+                        onClick={() => setIsManufacturerDropdownOpen(false)}
+                      />
+                      
+                      {/* Dropdown Content */}
+                      <div 
+                        className="absolute z-20 mt-2 w-full bg-white border-2 border-gray-200 rounded-xl shadow-lg max-h-80 overflow-y-auto"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <div className="p-2">
+                          {uniqueManufacturers.map(manufacturer => {
+                            const isSelected = selectedManufacturers.includes(manufacturer);
+                            return (
+                              <label
+                                key={manufacturer}
+                                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer transition-colors ${
+                                  isSelected
+                                    ? 'bg-blue-50 text-blue-900'
+                                    : 'hover:bg-gray-50 text-gray-700'
+                                }`}
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={(e) => {
+                                    e.stopPropagation();
+                                    if (isSelected) {
+                                      setSelectedManufacturers(selectedManufacturers.filter(m => m !== manufacturer));
+                                    } else {
+                                      setSelectedManufacturers([...selectedManufacturers, manufacturer]);
+                                    }
+                                  }}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+                                />
+                                <span className="flex-1 font-medium text-sm">
+                                  {manufacturer}
+                                </span>
+                              </label>
+                            );
+                          })}
+                          {selectedManufacturers.length > 0 && (
+                            <div className="pt-2 mt-2 border-t border-gray-200">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedManufacturers([]);
+                                }}
+                                className="w-full px-3 py-2 text-sm font-medium text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-colors"
+                              >
+                                Clear Selection
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+
               {/* Location Filter */}
               <div className="flex-shrink-0">
                 <label className="block text-xs font-semibold text-gray-700 mb-1.5">
@@ -673,32 +808,39 @@ export default function PortalPage() {
                 <label className="block text-xs font-semibold text-gray-700 mb-1.5">
                   Minimum Sleeps
                 </label>
-                <select
-                  value={minSleeps}
-                  onChange={(e) => setMinSleeps(Number(e.target.value))}
-                  className="w-36 appearance-none px-3 py-2 pr-8 bg-white border border-gray-300 rounded-lg text-sm text-gray-900 focus:border-slate-600 focus:ring-1 focus:ring-slate-200 focus:outline-none transition-all hover:border-gray-400"
-                  disabled={isLoadingInventory}
-                >
-                  <option value={0}>Any</option>
-                  <option value={2}>2+</option>
-                  <option value={4}>4+</option>
-                  <option value={6}>6+</option>
-                  <option value={8}>8+</option>
-                  <option value={10}>10+</option>
-                </select>
+                <div className="relative">
+                  <select
+                    value={minSleeps}
+                    onChange={(e) => setMinSleeps(Number(e.target.value))}
+                    className="w-36 appearance-none px-3 py-2 pr-8 bg-white border border-gray-300 rounded-lg text-sm text-gray-900 focus:border-slate-600 focus:ring-1 focus:ring-slate-200 focus:outline-none transition-all hover:border-gray-400"
+                    disabled={isLoadingInventory}
+                  >
+                    <option value={0}>Any</option>
+                    <option value={2}>2+</option>
+                    <option value={4}>4+</option>
+                    <option value={6}>6+</option>
+                    <option value={8}>8+</option>
+                    <option value={10}>10+</option>
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-500">
+                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                </div>
               </div>
 
-              {/* Distance Filter - Only show when user has entered zip code */}
-              {userCoordinates && (
-                <div className="flex-shrink-0">
-                  <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-                    Distance from Me
-                  </label>
+              {/* Distance Filter - Always visible but disabled until zip code entered */}
+              <div className="flex-shrink-0">
+                <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                  Distance from Me
+                </label>
+                <div className="relative">
                   <select
                     value={maxDistance}
                     onChange={(e) => setMaxDistance(Number(e.target.value))}
-                    className="w-44 appearance-none px-3 py-2 pr-8 bg-white border border-gray-300 rounded-lg text-sm text-gray-900 focus:border-slate-600 focus:ring-1 focus:ring-slate-200 focus:outline-none transition-all hover:border-gray-400"
-                    disabled={isLoadingInventory}
+                    className="w-44 appearance-none px-3 py-2 pr-8 bg-white border border-gray-300 rounded-lg text-sm text-gray-900 focus:border-slate-600 focus:ring-1 focus:ring-slate-200 focus:outline-none transition-all hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={!userCoordinates || isLoadingInventory}
                   >
                     <option value={10000}>Any Distance</option>
                     <option value={50}>Within 50 miles</option>
@@ -707,9 +849,341 @@ export default function PortalPage() {
                     <option value={500}>Within 500 miles</option>
                     <option value={1000}>Within 1,000 miles</option>
                   </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-500">
+                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
                 </div>
-              )}
+              </div>
             </div>
+            
+            {/* Mobile filter panel - slides in from right */}
+            <div 
+              className={`lg:hidden fixed inset-y-0 right-0 z-50 w-80 bg-white shadow-2xl transform transition-transform duration-300 ease-in-out ${
+                isFilterMenuOpen ? 'translate-x-0' : 'translate-x-full'
+              }`}
+            >
+              <div className="h-full overflow-y-auto">
+                {/* Mobile panel header */}
+                <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-4 flex items-center justify-between">
+                  <h3 className="text-lg font-bold text-gray-900">Filters</h3>
+                  <button
+                    onClick={() => setIsFilterMenuOpen(false)}
+                    className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
+                  >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+
+                {/* Mobile filters content */}
+                <div className="p-4 space-y-6">
+                  {/* Manufacturer Filter */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Manufacturer {selectedManufacturers.length > 0 && <span className="text-blue-600 text-xs">({selectedManufacturers.length})</span>}
+                    </label>
+                    <div className="space-y-2 max-h-48 overflow-y-auto border border-gray-200 rounded-lg p-2">
+                      {uniqueManufacturers.map(manufacturer => {
+                        const isSelected = selectedManufacturers.includes(manufacturer);
+                        return (
+                          <label
+                            key={manufacturer}
+                            className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-colors ${
+                              isSelected
+                                ? 'bg-blue-50 text-blue-900'
+                                : 'hover:bg-gray-50 text-gray-700'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => {
+                                if (isSelected) {
+                                  setSelectedManufacturers(selectedManufacturers.filter(m => m !== manufacturer));
+                                } else {
+                                  setSelectedManufacturers([...selectedManufacturers, manufacturer]);
+                                }
+                              }}
+                              className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+                            />
+                            <span className="flex-1 text-sm font-medium">
+                              {manufacturer}
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Location Filter */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Location
+                    </label>
+                    <div className="relative">
+                      <select
+                        value={selectedLocation}
+                        onChange={(e) => setSelectedLocation(e.target.value)}
+                        className="w-full appearance-none px-3 py-2 pr-8 bg-white border border-gray-300 rounded-lg text-sm text-gray-900 focus:border-slate-600 focus:ring-1 focus:ring-slate-200 focus:outline-none transition-all"
+                        disabled={isLoadingInventory || isLoadingOptions}
+                      >
+                        <option value="all">All Locations</option>
+                        {locations.map(loc => (
+                          <option key={loc.cmf} value={loc.cmf}>
+                            {loc.location} - {loc.storename}
+                          </option>
+                        ))}
+                      </select>
+                      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-500">
+                        <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* RV Type Filter */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      RV Type {selectedTypes.length > 0 && <span className="text-blue-600 text-xs">({selectedTypes.length})</span>}
+                    </label>
+                    <div className="space-y-2 max-h-48 overflow-y-auto border border-gray-200 rounded-lg p-2">
+                      {isLoadingOptions ? (
+                        <div className="flex items-center gap-2 text-sm text-gray-500 p-2">
+                          <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+                          </svg>
+                          Loading types...
+                        </div>
+                      ) : (
+                        availableUnitClasses.map(unitClass => {
+                          const isSelected = selectedTypes.includes(unitClass.class);
+                          return (
+                            <label
+                              key={unitClass.class_id}
+                              className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-colors ${
+                                isSelected
+                                  ? 'bg-blue-50 text-blue-900'
+                                  : 'hover:bg-gray-50 text-gray-700'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => {
+                                  if (isSelected) {
+                                    setSelectedTypes(selectedTypes.filter(t => t !== unitClass.class));
+                                  } else {
+                                    setSelectedTypes([...selectedTypes, unitClass.class]);
+                                  }
+                                }}
+                                className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+                              />
+                              <span className="flex-1 text-sm font-medium">
+                                {unitClass.class_description || unitClass.class}
+                              </span>
+                            </label>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Price Filter */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Price Range
+                    </label>
+                    <div className="space-y-3">
+                      {/* Price Range Slider */}
+                      <div className="px-1">
+                        <div className="flex mb-2 items-center justify-between text-xs text-gray-600">
+                          <span>${minPrice.toLocaleString()}</span>
+                          <span>${maxPrice.toLocaleString()}</span>
+                        </div>
+                        <Slider
+                          range
+                          min={0}
+                          max={100000}
+                          step={1000}
+                          value={[minPrice, maxPrice]}
+                          onChange={(value) => {
+                            if (Array.isArray(value)) {
+                              setMinPrice(value[0]);
+                              setMaxPrice(value[1]);
+                              setPriceMin(value[0].toString());
+                              setPriceMax(value[1].toString());
+                            }
+                          }}
+                          styles={{
+                            track: {
+                              backgroundColor: '#475569',
+                              height: 6,
+                            },
+                            rail: {
+                              backgroundColor: '#e5e7eb',
+                              height: 6,
+                            },
+                            handle: {
+                              backgroundColor: '#475569',
+                              borderColor: '#475569',
+                              opacity: 1,
+                              width: 14,
+                              height: 14,
+                              marginTop: -4,
+                            },
+                          }}
+                        />
+                      </div>
+
+                      {/* Price Input Fields */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">
+                            Min Price
+                          </label>
+                          <div className="relative">
+                            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500 text-xs">$</span>
+                            <input
+                              type="number"
+                              value={priceMin}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                setPriceMin(value);
+                                if (value) {
+                                  const numValue = Number(value);
+                                  if (numValue >= 0 && numValue <= maxPrice) {
+                                    setMinPrice(numValue);
+                                  }
+                                } else {
+                                  setMinPrice(0);
+                                }
+                              }}
+                              placeholder="0"
+                              className="w-full pl-5 pr-2 py-1.5 text-xs border border-gray-300 rounded-lg focus:border-slate-600 focus:ring-1 focus:ring-slate-200 focus:outline-none"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">
+                            Max Price
+                          </label>
+                          <div className="relative">
+                            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500 text-xs">$</span>
+                            <input
+                              type="number"
+                              value={priceMax}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                setPriceMax(value);
+                                if (value) {
+                                  const numValue = Number(value);
+                                  if (numValue >= minPrice && numValue <= 200000) {
+                                    setMaxPrice(numValue);
+                                  }
+                                } else {
+                                  setMaxPrice(200000);
+                                }
+                              }}
+                              placeholder="200000"
+                              className="w-full pl-5 pr-2 py-1.5 text-xs border border-gray-300 rounded-lg focus:border-slate-600 focus:ring-1 focus:ring-slate-200 focus:outline-none"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Sleeps Filter */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Minimum Sleeps
+                    </label>
+                    <div className="relative">
+                      <select
+                        value={minSleeps}
+                        onChange={(e) => setMinSleeps(Number(e.target.value))}
+                        className="w-full appearance-none px-3 py-2 pr-8 bg-white border border-gray-300 rounded-lg text-sm text-gray-900 focus:border-slate-600 focus:ring-1 focus:ring-slate-200 focus:outline-none"
+                        disabled={isLoadingInventory}
+                      >
+                        <option value={0}>Any</option>
+                        <option value={2}>2+</option>
+                        <option value={4}>4+</option>
+                        <option value={6}>6+</option>
+                        <option value={8}>8+</option>
+                        <option value={10}>10+</option>
+                      </select>
+                      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-500">
+                        <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Distance Filter */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Distance from Me
+                    </label>
+                    <div className="relative">
+                      <select
+                        value={maxDistance}
+                        onChange={(e) => setMaxDistance(Number(e.target.value))}
+                        className="w-full appearance-none px-3 py-2 pr-8 bg-white border border-gray-300 rounded-lg text-sm text-gray-900 focus:border-slate-600 focus:ring-1 focus:ring-slate-200 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                        disabled={!userCoordinates || isLoadingInventory}
+                      >
+                        <option value={10000}>Any Distance</option>
+                        <option value={50}>Within 50 miles</option>
+                        <option value={100}>Within 100 miles</option>
+                        <option value={250}>Within 250 miles</option>
+                        <option value={500}>Within 500 miles</option>
+                        <option value={1000}>Within 1,000 miles</option>
+                      </select>
+                      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-500">
+                        <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </div>
+                    </div>
+                    {!userCoordinates && (
+                      <p className="mt-1 text-xs text-gray-500">Enter a ZIP code above to enable distance filtering</p>
+                    )}
+                  </div>
+
+                  {/* Clear All Button */}
+                  {(selectedTypes.length > 0 || selectedLocation !== 'all' || priceMin || priceMax || minSleeps > 0 || selectedManufacturers.length > 0) && (
+                    <button
+                      onClick={() => {
+                        setSelectedTypes([]);
+                        setSelectedLocation('all');
+                        setPriceMin('');
+                        setPriceMax('');
+                        setMinPrice(0);
+                        setMaxPrice(200000);
+                        setMinSleeps(0);
+                        setSelectedManufacturers([]);
+                      }}
+                      className="w-full px-4 py-2 text-sm font-medium text-white bg-slate-700 rounded-lg hover:bg-slate-800 transition-colors"
+                    >
+                      Clear All Filters
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Overlay for mobile menu */}
+            {isFilterMenuOpen && (
+              <div 
+                className="lg:hidden fixed inset-0 bg-black/30 z-40"
+                onClick={() => setIsFilterMenuOpen(false)}
+              />
+            )}
             
             {isLoadingInventory && (
               <div className="mt-6 pt-6 border-t border-gray-200">
@@ -784,10 +1258,6 @@ export default function PortalPage() {
                 typeDescription={rvTypeDescription}
                 locations={locations}
                 distanceInMiles={distance}
-                onBuyNow={(rv) => {
-                  // TODO: Implement buy now functionality
-                  console.log('Buy now clicked for:', rv);
-                }}
                 onViewDetails={(rv) => {
                   // Open Bish's website with stock number
                   window.open(`https://www.bishs.com/new-rvs-for-sale?stock=${rv.stock}`, '_blank');
