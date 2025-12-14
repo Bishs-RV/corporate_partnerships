@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { RV } from '@/types/inventory';
 import Image from 'next/image';
+import { getPrimaryImage } from '@/lib/rvImages';
 
 type Step = 'configuration' | 'review';
 
@@ -104,7 +105,7 @@ export default function PurchaseWorkflow() {
   };
 
   const calculateDiscountedPrice = (originalPrice: number) => {
-    return originalPrice * (1 - KIEWIT_DISCOUNT_PERCENT / 100);
+    return Math.round(originalPrice * (1 - KIEWIT_DISCOUNT_PERCENT));
   };
 
   const calculateTotalPrice = () => {
@@ -282,13 +283,23 @@ export default function PurchaseWorkflow() {
           {/* RV Summary */}
           <div className="mb-8 pb-6 border-b border-gray-200">
             <div className="flex items-start justify-between">
-              <div>
+              <div className="flex-1">
                 <h2 className="text-2xl font-bold text-gray-900">{rv.name}</h2>
                 <p className="text-gray-600 mt-1">
                   {rv.year} {rv.make} • Stock #{rv.stock}
                 </p>
+                {/* RV Thumbnail */}
+                {getPrimaryImage(rv.stock) && (
+                  <div className="mt-3">
+                    <img
+                      src={getPrimaryImage(rv.stock)}
+                      alt={rv.name}
+                      className="w-48 h-36 rounded-lg border border-gray-200 object-cover"
+                    />
+                  </div>
+                )}
               </div>
-              <div className="text-right">
+              <div className="text-right ml-4">
                 <p className="text-sm text-gray-600 mb-1">Kiewit Employee Price</p>
                 <p className="text-3xl font-bold text-blue-600">
                   {formatCurrency(discountedPrice)}
@@ -316,7 +327,7 @@ export default function PurchaseWorkflow() {
 
                 {/* Delivery Method Toggle */}
                 <div className="mb-8">
-                  <label className="block text-sm font-semibold text-gray-700 mb-3">Delivery Method</label>
+                  <label className="block text-xl font-bold text-gray-800 mb-4">Delivery Method</label>
                   <div className="inline-flex rounded-lg border-2 border-gray-300 overflow-hidden">
                     <button
                       onClick={() => setConfigurationData({ ...configurationData, deliveryMethod: 'pickup' })}
@@ -381,7 +392,7 @@ export default function PurchaseWorkflow() {
 
                 {/* Cash vs Finance Toggle */}
                 <div className="mb-8">
-                  <label className="block text-sm font-semibold text-gray-700 mb-3">Payment Method</label>
+                  <label className="block text-xl font-bold text-gray-800 mb-4">Payment Method</label>
                   <div className="inline-flex rounded-lg border-2 border-gray-300 overflow-hidden">
                     <button
                       onClick={() => setConfigurationData({ ...configurationData, paymentMethod: 'cash' })}
