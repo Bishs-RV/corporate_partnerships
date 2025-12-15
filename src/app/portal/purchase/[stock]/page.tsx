@@ -6,7 +6,7 @@ import { RV } from '@/types/inventory';
 import Image from 'next/image';
 import { getPrimaryImage } from '@/lib/rvImages';
 
-type Step = 'configuration' | 'review';
+type Step = 'configuration' | 'contact' | 'review';
 
 interface ConfigurationData {
   powerPackage?: string;
@@ -14,6 +14,17 @@ interface ConfigurationData {
   brakeControl?: string;
   paymentMethod: 'cash' | 'finance';
   deliveryMethod: 'pickup' | 'ship';
+}
+
+interface ContactData {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  address: string;
+  city: string;
+  state: string;
+  zipCode: string;
 }
 
 const KIEWIT_DISCOUNT_PERCENT = 0.15;
@@ -37,6 +48,17 @@ export default function PurchaseWorkflow() {
     deliveryMethod: 'ship',
   });
 
+  const [contactData, setContactData] = useState<ContactData>({
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    address: '',
+    city: '',
+    state: '',
+    zipCode: '',
+  });
+
   useEffect(() => {
     // Check if user is verified
     const verified = localStorage.getItem('verified');
@@ -48,6 +70,12 @@ export default function PurchaseWorkflow() {
     }
 
     setUserEmail(email);
+    
+    // Pre-populate contact data from localStorage
+    setContactData(prev => ({
+      ...prev,
+      email: email
+    }));
     
     // Load zip code from localStorage if available
     const savedZip = localStorage.getItem('userZip');
@@ -128,12 +156,49 @@ export default function PurchaseWorkflow() {
         alert('Please enter a valid 5-digit ZIP code for shipping.');
         return;
       }
+      setCurrentStep('contact');
+    } else if (currentStep === 'contact') {
+      // Validate contact information
+      if (!contactData.firstName.trim()) {
+        alert('Please enter your first name.');
+        return;
+      }
+      if (!contactData.lastName.trim()) {
+        alert('Please enter your last name.');
+        return;
+      }
+      if (!contactData.email.trim() || !contactData.email.includes('@')) {
+        alert('Please enter a valid email address.');
+        return;
+      }
+      if (!contactData.phone.trim() || contactData.phone.replace(/\D/g, '').length < 10) {
+        alert('Please enter a valid phone number.');
+        return;
+      }
+      if (!contactData.address.trim()) {
+        alert('Please enter your street address.');
+        return;
+      }
+      if (!contactData.city.trim()) {
+        alert('Please enter your city.');
+        return;
+      }
+      if (!contactData.state.trim()) {
+        alert('Please select your state.');
+        return;
+      }
+      if (!contactData.zipCode.trim() || contactData.zipCode.length !== 5) {
+        alert('Please enter a valid 5-digit ZIP code.');
+        return;
+      }
       setCurrentStep('review');
     }
   };
 
   const handleBack = () => {
     if (currentStep === 'review') {
+      setCurrentStep('contact');
+    } else if (currentStep === 'contact') {
       setCurrentStep('configuration');
     }
   };
@@ -156,8 +221,19 @@ export default function PurchaseWorkflow() {
       totalPrice: calculateTotalPrice(),
     });
 
-    // Redirect to portal with success message
-    router.push('/portal');
+    // Redirect to confirmation page with order details
+    const params = new URLSearchParams({
+      rvName: rv?.name || '',
+      stock: stock,
+      totalPrice: calculateTotalPrice().toString(),
+      paymentMethod: configurationData.paymentMethod,
+      deliveryMethod: configurationData.deliveryMethod,
+      customerName: `${contactData.firstName} ${contactData.lastName}`,
+      customerEmail: contactData.email,
+      customerPhone: contactData.phone,
+    });
+    
+    router.push(`/portal/purchase/${stock}/confirmation?${params.toString()}`);
   };
 
   const startDrawing = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
@@ -211,7 +287,7 @@ export default function PurchaseWorkflow() {
   };
 
   const getStepProgress = () => {
-    const steps: Step[] = ['configuration', 'review'];
+    const steps: Step[] = ['configuration', 'contact', 'review'];
     const currentIndex = steps.indexOf(currentStep);
     return ((currentIndex + 1) / steps.length) * 100;
   };
@@ -262,6 +338,9 @@ export default function PurchaseWorkflow() {
             <div className="flex justify-between text-sm font-semibold">
               <span className={currentStep === 'configuration' ? 'text-blue-600' : 'text-gray-500'}>
                 Configuration
+              </span>
+              <span className={currentStep === 'contact' ? 'text-blue-600' : 'text-gray-500'}>
+                Contact Info
               </span>
               <span className={currentStep === 'review' ? 'text-blue-600' : 'text-gray-500'}>
                 Review & Submit
@@ -537,6 +616,159 @@ export default function PurchaseWorkflow() {
                   onClick={handleNext}
                   className="px-6 py-3 bg-[#B43732] text-white text-xs font-bold uppercase tracking-wide rounded hover:bg-[#9A2F2B] transition-colors"
                 >
+                  Next: Contact Information
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Contact Information Step */}
+          {currentStep === 'contact' && (
+            <div className="space-y-6">
+              <h3 className="text-2xl font-bold text-gray-800 mb-6">
+                Contact Information
+              </h3>
+
+              <div className="bg-white border-2 border-gray-300 rounded-lg p-6 space-y-6">
+                {/* First and Last Name Row */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor="firstName" className="block text-xl font-bold text-gray-800 mb-4">
+                      First Name
+                    </label>
+                    <input
+                      type="text"
+                      id="firstName"
+                      value={contactData.firstName}
+                      onChange={(e) => setContactData({ ...contactData, firstName: e.target.value })}
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-[#B43732] text-gray-800"
+                      placeholder="First name"
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="lastName" className="block text-xl font-bold text-gray-800 mb-4">
+                      Last Name
+                    </label>
+                    <input
+                      type="text"
+                      id="lastName"
+                      value={contactData.lastName}
+                      onChange={(e) => setContactData({ ...contactData, lastName: e.target.value })}
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-[#B43732] text-gray-800"
+                      placeholder="Last name"
+                    />
+                  </div>
+                </div>
+
+                {/* Email */}
+                <div>
+                  <label htmlFor="email" className="block text-xl font-bold text-gray-800 mb-4">
+                    Email Address
+                  </label>
+                  <input
+                    type="email"
+                    id="email"
+                    value={contactData.email}
+                    onChange={(e) => setContactData({ ...contactData, email: e.target.value })}
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-[#B43732] text-gray-800"
+                    placeholder="Enter your email address"
+                  />
+                </div>
+
+                {/* Phone */}
+                <div>
+                  <label htmlFor="phone" className="block text-xl font-bold text-gray-800 mb-4">
+                    Phone Number
+                  </label>
+                  <input
+                    type="tel"
+                    id="phone"
+                    value={contactData.phone}
+                    onChange={(e) => setContactData({ ...contactData, phone: e.target.value })}
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-[#B43732] text-gray-800"
+                    placeholder="Enter your phone number"
+                  />
+                </div>
+
+                {/* Address */}
+                <div>
+                  <label htmlFor="address" className="block text-xl font-bold text-gray-800 mb-4">
+                    Street Address
+                  </label>
+                  <input
+                    type="text"
+                    id="address"
+                    value={contactData.address}
+                    onChange={(e) => setContactData({ ...contactData, address: e.target.value })}
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-[#B43732] text-gray-800"
+                    placeholder="Enter your street address"
+                  />
+                </div>
+
+                {/* City, State, Zip Code Row */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* City */}
+                  <div className="md:col-span-1">
+                    <label htmlFor="city" className="block text-xl font-bold text-gray-800 mb-4">
+                      City
+                    </label>
+                    <input
+                      type="text"
+                      id="city"
+                      value={contactData.city}
+                      onChange={(e) => setContactData({ ...contactData, city: e.target.value })}
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-[#B43732] text-gray-800"
+                      placeholder="City"
+                    />
+                  </div>
+
+                  {/* State */}
+                  <div className="md:col-span-1">
+                    <label htmlFor="state" className="block text-xl font-bold text-gray-800 mb-4">
+                      State
+                    </label>
+                    <input
+                      type="text"
+                      id="state"
+                      value={contactData.state}
+                      onChange={(e) => setContactData({ ...contactData, state: e.target.value })}
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-[#B43732] text-gray-800"
+                      placeholder="State"
+                      maxLength={2}
+                    />
+                  </div>
+
+                  {/* Zip Code */}
+                  <div className="md:col-span-1">
+                    <label htmlFor="zipCode" className="block text-xl font-bold text-gray-800 mb-4">
+                      Zip Code
+                    </label>
+                    <input
+                      type="text"
+                      id="zipCode"
+                      value={contactData.zipCode}
+                      onChange={(e) => setContactData({ ...contactData, zipCode: e.target.value })}
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-[#B43732] text-gray-800"
+                      placeholder="Zip Code"
+                      maxLength={10}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Navigation Buttons */}
+              <div className="flex justify-between mt-8 pt-6 border-t border-gray-200">
+                <button
+                  onClick={handleBack}
+                  className="px-6 py-3 bg-gray-200 text-gray-700 text-xs font-bold uppercase tracking-wide rounded hover:bg-gray-300 transition-colors"
+                >
+                  Back to Configuration
+                </button>
+                <button
+                  onClick={handleNext}
+                  className="px-6 py-3 bg-[#B43732] text-white text-xs font-bold uppercase tracking-wide rounded hover:bg-[#9A2F2B] transition-colors"
+                >
                   Next: Review Purchase
                 </button>
               </div>
@@ -609,6 +841,32 @@ export default function PurchaseWorkflow() {
                   <div className="flex justify-between px-6 py-4 bg-blue-50">
                     <div className="font-bold text-gray-800 text-lg">TOTAL</div>
                     <div className="font-bold text-blue-600 text-xl">{formatCurrency(calculateTotalPrice())}</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Contact Information */}
+              <div className="bg-gray-50 rounded-lg p-6 border border-gray-200">
+                <h4 className="font-bold text-gray-800 mb-4">Contact Information</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm text-gray-500">Name</p>
+                    <p className="text-gray-800 font-medium">{contactData.firstName} {contactData.lastName}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">Email</p>
+                    <p className="text-gray-800 font-medium">{contactData.email}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">Phone</p>
+                    <p className="text-gray-800 font-medium">{contactData.phone}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">Address</p>
+                    <p className="text-gray-800 font-medium">
+                      {contactData.address}<br />
+                      {contactData.city}, {contactData.state} {contactData.zipCode}
+                    </p>
                   </div>
                 </div>
               </div>

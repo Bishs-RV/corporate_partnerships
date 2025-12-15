@@ -904,28 +904,90 @@ export default function PortalPage() {
             </div>
 
             {/* Inventory Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-              {paginatedInventory.map(rv => {
-                // Find the full RV type description
-                const rvTypeDescription = unitClasses.find(uc => uc.class === rv.type)?.class_description || undefined;
-                
-                // Get distance for this RV's location
-                const distanceInMiles = rv.cmfId && locationDistances.has(rv.cmfId) 
-                  ? locationDistances.get(rv.cmfId)! 
-                  : null;
+            {isLoadingInventory ? (
+              <div className="text-center py-16 px-4">
+                <div className="max-w-md mx-auto">
+                  <div className="flex justify-center mb-6">
+                    <svg className="animate-spin h-16 w-16 text-slate-700" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+                    </svg>
+                  </div>
+                  <h3 className="text-2xl font-bold text-gray-900 mb-3">
+                    Loading Inventory
+                  </h3>
+                  <p className="text-gray-600">
+                    Please wait while we load available RVs...
+                  </p>
+                </div>
+              </div>
+            ) : paginatedInventory.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                {paginatedInventory.map(rv => {
+                  // Find the full RV type description
+                  const rvTypeDescription = unitClasses.find(uc => uc.class === rv.type)?.class_description || undefined;
+                  
+                  // Get distance for this RV's location
+                  const distanceInMiles = rv.cmfId && locationDistances.has(rv.cmfId) 
+                    ? locationDistances.get(rv.cmfId)! 
+                    : null;
 
-                return (
-                  <RVCard
-                    key={rv.id}
-                    rv={rv}
-                    discountPercent={KIEWIT_DISCOUNT_PERCENT}
-                    typeDescription={rvTypeDescription}
-                    locations={locations}
-                    distanceInMiles={distanceInMiles}
-                  />
-                );
-              })}
-            </div>
+                  return (
+                    <RVCard
+                      key={rv.id}
+                      rv={rv}
+                      discountPercent={KIEWIT_DISCOUNT_PERCENT}
+                      typeDescription={rvTypeDescription}
+                      locations={locations}
+                      distanceInMiles={distanceInMiles}
+                    />
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="text-center py-16 px-4">
+                <div className="max-w-md mx-auto">
+                  <svg className="w-24 h-24 mx-auto text-gray-300 mb-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                  <h3 className="text-2xl font-bold text-gray-900 mb-3">
+                    No RVs Found
+                  </h3>
+                  <p className="text-gray-600 mb-6 leading-relaxed">
+                    We couldn't find any RVs matching your current filter criteria. Try adjusting your filters to see more results.
+                  </p>
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6">
+                    <p className="text-sm text-gray-900 font-semibold mb-2">Suggestions:</p>
+                    <ul className="text-sm text-gray-700 space-y-1 text-left">
+                      <li>• Remove or broaden your manufacturer selection</li>
+                      <li>• Try selecting "All Locations" to see more options</li>
+                      <li>• Adjust your price range to include more RVs</li>
+                      <li>• Increase the distance filter if you're searching by location</li>
+                      <li>• Select more RV types to expand your search</li>
+                    </ul>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setSelectedTypes([]);
+                      setSelectedLocation('all');
+                      setPriceMin('');
+                      setPriceMax('');
+                      setMinPrice(0);
+                      setMaxPrice(200000);
+                      setMinSleeps(0);
+                      setMaxDistance(10000);
+                      setSelectedManufacturers([]);
+                    }}
+                    className="inline-flex items-center gap-2 px-6 py-3 bg-slate-700 text-white font-semibold rounded-lg hover:bg-slate-800 transition-colors"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Clear All Filters
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Pagination */}
             {totalPages > 1 && (

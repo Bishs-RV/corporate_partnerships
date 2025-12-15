@@ -234,7 +234,7 @@ export default function RVCard({
         <div className="grid grid-cols-2 gap-2 mt-auto">
           <Link
             href={`/portal/purchase/${rv.stock}`}
-            className="px-6 py-3 bg-[#B43732] text-white text-xs font-bold uppercase tracking-wide rounded hover:bg-[#9A2F2B] transition-colors text-center"
+            className="flex items-center justify-center text-center px-6 py-3 bg-[#B43732] text-white text-xs font-bold uppercase tracking-wide rounded hover:bg-[#9A2F2B] transition-colors"
           >
             Buy Now
           </Link>
@@ -243,7 +243,7 @@ export default function RVCard({
               href={detailUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="px-6 py-3 bg-[#1A1A1A] text-white text-xs font-bold uppercase tracking-wide rounded hover:bg-black transition-colors text-center relative"
+              className="flex items-center justify-center text-center px-6 py-3 bg-[#1A1A1A] text-white text-xs font-bold uppercase tracking-wide rounded hover:bg-black transition-colors relative"
             >
               Learn More
               <svg 
@@ -258,7 +258,7 @@ export default function RVCard({
           ) : (
             <button 
               onClick={() => onViewDetails?.(rv)}
-              className="px-6 py-3 bg-[#1A1A1A] text-white text-xs font-bold uppercase tracking-wide rounded hover:bg-black transition-colors"
+              className="flex items-center justify-center text-center px-6 py-3 bg-[#1A1A1A] text-white text-xs font-bold uppercase tracking-wide rounded hover:bg-black transition-colors"
             >
               Learn More
             </button>
