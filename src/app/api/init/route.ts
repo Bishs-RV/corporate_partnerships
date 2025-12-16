@@ -5,6 +5,9 @@ interface Location {
   cmf: number;
   location: string;
   storename: string;
+  address: string | null;
+  city: string | null;
+  state: string | null;
   zipcode: string | null;
   latitude: number | null;
   longitude: number | null;
@@ -31,13 +34,16 @@ export async function GET() {
             WHEN storename = 'RVFix' THEN 'Corp'
             ELSE storename
           END AS storename,
-          SUBSTRING(address FROM '\d{5}$') as zipcode,
+          CAST(NULL AS TEXT) as address,
+          CAST(NULL AS TEXT) as city,
+          CAST(NULL AS TEXT) as state,
+          SUBSTRING(address FROM '\\d{5}$') as zipcode,
           CASE 
-            WHEN lat ~ '^[0-9.\-]+$' THEN lat::DOUBLE PRECISION
+            WHEN lat ~ '^[0-9.\\-]+$' THEN lat::DOUBLE PRECISION
             ELSE NULL 
           END as latitude,
           CASE 
-            WHEN lon ~ '^[0-9.\-]+$' THEN lon::DOUBLE PRECISION
+            WHEN lon ~ '^[0-9.\\-]+$' THEN lon::DOUBLE PRECISION
             ELSE NULL 
           END as longitude
         FROM location_detail

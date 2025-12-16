@@ -75,10 +75,156 @@ export async function getCoordinatesFromZip(zipCode: string): Promise<Coordinate
 // Store zip coordinates in local cache to avoid repeated API calls
 const zipCodeCache = new Map<string, Coordinates>();
 
+// Load cache from localStorage on module initialization
+if (typeof window !== 'undefined') {
+  try {
+    const stored = localStorage.getItem('zipCoordinatesCache');
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      Object.entries(parsed).forEach(([zip, coords]) => {
+        zipCodeCache.set(zip, coords as Coordinates);
+      });
+    }
+  } catch (error) {
+    console.error('Error loading zip coordinate cache:', error);
+  }
+}
+
 export function getCachedCoordinates(zipCode: string): Coordinates | null {
   return zipCodeCache.get(zipCode) || null;
 }
 
 export function cacheCoordinates(zipCode: string, coordinates: Coordinates): void {
   zipCodeCache.set(zipCode, coordinates);
+  
+  // Persist to localStorage
+  if (typeof window !== 'undefined') {
+    try {
+      const cacheObject = Object.fromEntries(zipCodeCache);
+      localStorage.setItem('zipCoordinatesCache', JSON.stringify(cacheObject));
+    } catch (error) {
+      console.error('Error saving zip coordinate cache:', error);
+    }
+  }
+}
+
+// Google Maps Distance Matrix API types
+export interface LocationWithCoordinates {
+  locationId: string;
+  latitude: number;
+  longitude: number;
+}
+
+export interface DrivingDistanceResult {
+  locationId: string;
+  distanceInMiles: number;
+  durationInMinutes: number;
+}
+
+// Session storage cache for distance matrix results
+const DISTANCE_CACHE_KEY = 'distanceMatrixCache';
+
+interface DistanceCacheEntry {
+  zipCode: string;
+  timestamp: number;
+  results: Record<string, number>; // locationId -> distance in miles
+}
+
+function getDistanceCache(zipCode: string): Record<string, number> | null {
+  if (typeof window === 'undefined') return null;
+  
+  try {
+    const stored = sessionStorage.getItem(DISTANCE_CACHE_KEY);
+    if (!stored) return null;
+    
+    const cache: DistanceCacheEntry = JSON.parse(stored);
+    
+    // Check if cache is for the same zip code and less than 1 hour old
+    if (cache.zipCode === zipCode && Date.now() - cache.timestamp < 3600000) {
+      return cache.results;
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error reading distance cache:', error);
+    return null;
+  }
+}
+
+function setDistanceCache(zipCode: string, results: Record<string, number>): void {
+  if (typeof window === 'undefined') return;
+  
+  try {
+    const cache: DistanceCacheEntry = {
+      zipCode,
+      timestamp: Date.now(),
+      results
+    };
+    sessionStorage.setItem(DISTANCE_CACHE_KEY, JSON.stringify(cache));
+  } catch (error) {
+    console.error('Error saving distance cache:', error);
+  }
+}
+
+/**
+ * Calculate driving distances from origin zip code to multiple destination locations
+ * using Google Maps Distance Matrix API in a single batch call
+ */
+export async function calculateDrivingDistances(
+  originZipCode: string,
+  destinations: LocationWithCoordinates[]
+): Promise<Record<string, number>> {
+  if (destinations.length === 0) {
+    return {};
+  }
+
+  try {
+    // Call our API route which proxies to Google Maps
+    const response = await fetch('/api/distance-matrix', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        originZipCode,
+        destinations: destinations.map(loc => ({
+          latitude: loc.latitude,
+          longitude: loc.longitude
+        }))
+      })
+    });
+    
+    if (!response.ok) {
+      console.error('Distance Matrix API error:', response.statusText);
+      return {};
+    }
+
+    const result = await response.json();
+
+    if (!result.success) {
+      console.error('Distance Matrix API error:', result.error);
+      return {};
+    }
+
+    const data = result.data;
+
+    // Parse results
+    const results: Record<string, number> = {};
+    
+    if (data.rows && data.rows[0] && data.rows[0].elements) {
+      data.rows[0].elements.forEach((element: any, index: number) => {
+        if (element.status === 'OK' && element.distance) {
+          const locationId = destinations[index].locationId;
+          // Convert meters to miles and round
+          const distanceInMiles = Math.round(element.distance.value * 0.000621371);
+          results[locationId] = distanceInMiles;
+        }
+      });
+    }
+
+    return results;
+  } catch (error) {
+    console.error('Error calculating driving distances:', error);
+    return {};
+  }
 }

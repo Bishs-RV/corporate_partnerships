@@ -1,3 +1,5 @@
+import { isDeliveryAvailable, isPickupAvailable } from '@/config/manufacturers';
+
 // Database inventory types from unit.get_inventory stored procedure
 export interface DatabaseInventoryRow {
   inventory_id: number;
@@ -87,6 +89,16 @@ export interface RV {
   uvw: number; // Unloaded Vehicle Weight
   location: string;
   cmfId: number | null; // Location ID for looking up full location name
+  // Availability attributes (computed from manufacturer config)
+  pickupAvailable: boolean;
+  deliveryAvailable: boolean;
+}
+
+// Grouped RV type for displaying multiple units of the same model
+export interface GroupedRV extends RV {
+  quantity: number; // Number of units in this group
+  multipleLocations: boolean; // True if units are at different locations
+  units: RV[]; // All individual RV units in this group
 }
 
 // Transform database row to UI RV type
@@ -98,6 +110,11 @@ export function transformInventoryToRV(row: DatabaseInventoryRow): RV {
     row.sub_make,
     row.model,
   ].filter(Boolean);
+  
+  // Calculate availability once during transformation
+  const manufacturer = row.manufacturer || '';
+  const pickupAvailable = isPickupAvailable(manufacturer);
+  const deliveryAvailable = isDeliveryAvailable(manufacturer);
   
   const name = nameParts.join(' ');
   
@@ -139,5 +156,48 @@ export function transformInventoryToRV(row: DatabaseInventoryRow): RV {
     uvw: row.uvwr ? parseFloat(row.uvwr) : 0,
     location: row.location || '',
     cmfId: row.cmf_id,
+    // Computed availability (stored for use throughout the purchasing process)
+    pickupAvailable,
+    deliveryAvailable,
   };
+}
+
+/**
+ * Group RVs by model (manufacturer + make + model + year)
+ * Returns an array of GroupedRV objects with quantity and location info
+ */
+export function groupRVsByModel(rvs: RV[]): GroupedRV[] {
+  const groupMap = new Map<string, RV[]>();
+  
+  // Group RVs by a unique key (manufacturer + make + model + year)
+  rvs.forEach(rv => {
+    const key = `${rv.manufacturer}_${rv.make}_${rv.model}_${rv.year}`.toLowerCase();
+    if (!groupMap.has(key)) {
+      groupMap.set(key, []);
+    }
+    groupMap.get(key)!.push(rv);
+  });
+  
+  // Transform groups into GroupedRV objects
+  const groupedRVs: GroupedRV[] = [];
+  groupMap.forEach((units) => {
+    // Use the first unit as the base
+    const baseRV = units[0];
+    
+    // Check if units are at multiple locations
+    const uniqueLocations = new Set(units.map(rv => rv.cmfId).filter(Boolean));
+    const multipleLocations = uniqueLocations.size > 1;
+    
+    // Create grouped RV
+    const groupedRV: GroupedRV = {
+      ...baseRV,
+      quantity: units.length,
+      multipleLocations,
+      units,
+    };
+    
+    groupedRVs.push(groupedRV);
+  });
+  
+  return groupedRVs;
 }

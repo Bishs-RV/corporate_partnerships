@@ -88,7 +88,7 @@ export default function EmailSignupForm() {
             }}
             placeholder="your.email@kiewit.com"
             required
-            className="px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="px-6 py-4 text-lg border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-4 focus:ring-blue-300 focus:border-blue-500 shadow-sm hover:border-gray-400 transition-all"
           />
           <p className="text-xs text-gray-500 mt-1">
             Must be a valid @kiewit.com email address

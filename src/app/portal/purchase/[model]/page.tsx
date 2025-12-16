@@ -5,6 +5,8 @@ import { useRouter, useParams } from 'next/navigation';
 import { RV } from '@/types/inventory';
 import Image from 'next/image';
 import { getPrimaryImage } from '@/lib/rvImages';
+import Autocomplete from 'react-google-autocomplete';
+import { PatternFormat } from 'react-number-format';
 
 type Step = 'configuration' | 'contact' | 'review';
 
@@ -14,6 +16,7 @@ interface ConfigurationData {
   brakeControl?: string;
   paymentMethod: 'cash' | 'finance';
   deliveryMethod: 'pickup' | 'ship';
+  selectedStock?: string; // Which specific unit the user selects
 }
 
 interface ContactData {
@@ -29,13 +32,26 @@ interface ContactData {
 
 const KIEWIT_DISCOUNT_PERCENT = 0.15;
 
+// Helper function to parse model slug back to components
+function parseModelSlug(slug: string): { manufacturer?: string; make?: string; model?: string; year?: string } {
+  const parts = slug.split('-');
+  // This is a simple parse - in production you might want more robust logic
+  return {
+    manufacturer: parts[0],
+    make: parts[1],
+    model: parts.slice(2, -1).join(' '),
+    year: parts[parts.length - 1]
+  };
+}
+
 export default function PurchaseWorkflow() {
   const router = useRouter();
   const params = useParams();
-  const stock = params.stock as string;
+  const modelSlug = params.model as string;
   
   const [userEmail, setUserEmail] = useState('');
-  const [rv, setRV] = useState<RV | null>(null);
+  const [availableUnits, setAvailableUnits] = useState<RV[]>([]); // All units of this model
+  const [selectedRV, setSelectedRV] = useState<RV | null>(null); // Currently selected unit
   const [currentStep, setCurrentStep] = useState<Step>('configuration');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSignatureModal, setShowSignatureModal] = useState(false);
@@ -83,8 +99,8 @@ export default function PurchaseWorkflow() {
       setUserZip(savedZip);
     }
 
-    // Fetch the specific RV from the inventory
-    async function fetchRV() {
+    // Fetch all RVs matching this model
+    async function fetchModelUnits() {
       try {
         // First, get all locations
         const locationsResponse = await fetch('/api/init');
@@ -99,16 +115,41 @@ export default function PurchaseWorkflow() {
         const locations = locationsResult.data.locations;
         const allLocationIds = locations.map((loc: any) => loc.cmf).join(',');
         
-        // Get all inventory from all locations to find the specific RV
+        // Get all inventory from all locations
         const response = await fetch(`/api/inventory?locationIds=${allLocationIds}`);
         const result = await response.json();
         
         if (result.success) {
-          const foundRV = result.data.find((item: RV) => item.stock === stock);
-          if (foundRV) {
-            setRV(foundRV);
+          // Parse the model slug to get matching criteria
+          const parsedModel = parseModelSlug(modelSlug);
+          
+          // Filter inventory to find all units matching this model
+          const matchingUnits = result.data.filter((item: RV) => {
+            const itemSlug = [
+              item.manufacturer,
+              item.make,
+              item.model,
+              item.year
+            ].filter(Boolean)
+              .join('-')
+              .toLowerCase()
+              .replace(/[^a-z0-9-]/g, '-')
+              .replace(/-+/g, '-')
+              .replace(/^-|-$/g, '');
+            
+            return itemSlug === modelSlug;
+          });
+          
+          if (matchingUnits.length > 0) {
+            setAvailableUnits(matchingUnits);
+            // Default to the first unit
+            setSelectedRV(matchingUnits[0]);
+            setConfigurationData(prev => ({
+              ...prev,
+              selectedStock: matchingUnits[0].stock
+            }));
           } else {
-            console.error('RV not found with stock:', stock);
+            console.error('No units found for model:', modelSlug);
             router.push('/portal');
           }
         } else {
@@ -116,13 +157,13 @@ export default function PurchaseWorkflow() {
           router.push('/portal');
         }
       } catch (err) {
-        console.error('Error fetching RV:', err);
+        console.error('Error fetching model units:', err);
         router.push('/portal');
       }
     }
 
-    fetchRV();
-  }, [stock, router]);
+    fetchModelUnits();
+  }, [modelSlug, router]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -136,8 +177,22 @@ export default function PurchaseWorkflow() {
     return Math.round(originalPrice * (1 - KIEWIT_DISCOUNT_PERCENT));
   };
 
+  const calculateMonthlyPayment = (price: number) => {
+    const DOWN_PAYMENT_PERCENT = 0.20;
+    const APR = 0.0525; // 5.25%
+    const MONTHS = 120;
+
+    const downPayment = price * DOWN_PAYMENT_PERCENT;
+    const loanAmount = price - downPayment;
+    const monthlyRate = APR / 12;
+
+    const monthlyPayment = loanAmount * (monthlyRate * Math.pow(1 + monthlyRate, MONTHS)) / (Math.pow(1 + monthlyRate, MONTHS) - 1);
+
+    return Math.round(monthlyPayment);
+  };
+
   const calculateTotalPrice = () => {
-    let total = calculateDiscountedPrice(rv?.price || 0);
+    let total = calculateDiscountedPrice(selectedRV?.price || 0);
     
     // Add option prices
     if (configurationData.powerPackage === 'standard') total += 419;
@@ -149,8 +204,24 @@ export default function PurchaseWorkflow() {
     return total;
   };
 
+  const handleStockSelection = (stock: string) => {
+    const unit = availableUnits.find(u => u.stock === stock);
+    if (unit) {
+      setSelectedRV(unit);
+      setConfigurationData(prev => ({
+        ...prev,
+        selectedStock: stock
+      }));
+    }
+  };
+
   const handleNext = () => {
     if (currentStep === 'configuration') {
+      // Validate stock selection
+      if (!configurationData.selectedStock) {
+        alert('Please select a specific unit.');
+        return;
+      }
       // Validate ZIP code if Ship To is selected
       if (configurationData.deliveryMethod === 'ship' && userZip.length !== 5) {
         alert('Please enter a valid 5-digit ZIP code for shipping.');
@@ -171,8 +242,9 @@ export default function PurchaseWorkflow() {
         alert('Please enter a valid email address.');
         return;
       }
-      if (!contactData.phone.trim() || contactData.phone.replace(/\D/g, '').length < 10) {
-        alert('Please enter a valid phone number.');
+      const phoneDigits = contactData.phone.replace(/\D/g, '');
+      if (!contactData.phone.trim() || phoneDigits.length !== 10) {
+        alert('Please enter a valid 10-digit phone number.');
         return;
       }
       if (!contactData.address.trim()) {
@@ -215,16 +287,17 @@ export default function PurchaseWorkflow() {
     // In production, this would create a new deal in the database
     console.log('Purchase initiated:', {
       userEmail,
-      stock,
-      rvId: rv?.id,
+      modelSlug,
+      rvId: selectedRV?.id,
+      stock: configurationData.selectedStock,
       configurationData,
       totalPrice: calculateTotalPrice(),
     });
 
     // Redirect to confirmation page with order details
     const params = new URLSearchParams({
-      rvName: rv?.name || '',
-      stock: stock,
+      rvName: selectedRV?.name || '',
+      stock: configurationData.selectedStock || '',
       totalPrice: calculateTotalPrice().toString(),
       paymentMethod: configurationData.paymentMethod,
       deliveryMethod: configurationData.deliveryMethod,
@@ -233,7 +306,7 @@ export default function PurchaseWorkflow() {
       customerPhone: contactData.phone,
     });
     
-    router.push(`/portal/purchase/${stock}/confirmation?${params.toString()}`);
+    router.push(`/portal/purchase/${modelSlug}/confirmation?${params.toString()}`);
   };
 
   const startDrawing = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
@@ -292,15 +365,15 @@ export default function PurchaseWorkflow() {
     return ((currentIndex + 1) / steps.length) * 100;
   };
 
-  if (!rv) {
+  if (!selectedRV || availableUnits.length === 0) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-gray-600">Loading RV details...</div>
+        <div className="text-gray-600">Loading model details...</div>
       </div>
     );
   }
 
-  const discountedPrice = calculateDiscountedPrice(rv.price);
+  const discountedPrice = calculateDiscountedPrice(selectedRV.price);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -318,7 +391,7 @@ export default function PurchaseWorkflow() {
               />
               <div className="border-l border-gray-300 pl-4">
                 <h1 className="text-2xl font-bold text-gray-900">Start Your Purchase</h1>
-                <p className="text-sm text-gray-600 mt-0.5">{rv.name}</p>
+                <p className="text-sm text-gray-600 mt-0.5">{selectedRV.name}</p>
               </div>
             </div>
             <button
@@ -363,16 +436,16 @@ export default function PurchaseWorkflow() {
           <div className="mb-8 pb-6 border-b border-gray-200">
             <div className="flex items-start justify-between">
               <div className="flex-1">
-                <h2 className="text-2xl font-bold text-gray-900">{rv.name}</h2>
+                <h2 className="text-2xl font-bold text-gray-900">{selectedRV.name}</h2>
                 <p className="text-gray-600 mt-1">
-                  {rv.year} {rv.make} • Stock #{rv.stock}
+                  {selectedRV.year} {selectedRV.make} • {availableUnits.length} unit{availableUnits.length > 1 ? 's' : ''} available
                 </p>
                 {/* RV Thumbnail */}
-                {getPrimaryImage(rv.stock) && (
+                {getPrimaryImage(selectedRV.stock) && (
                   <div className="mt-3">
                     <img
-                      src={getPrimaryImage(rv.stock)}
-                      alt={rv.name}
+                      src={getPrimaryImage(selectedRV.stock)}
+                      alt={selectedRV.name}
                       className="w-48 h-36 rounded-lg border border-gray-200 object-cover"
                     />
                   </div>
@@ -383,11 +456,14 @@ export default function PurchaseWorkflow() {
                 <p className="text-3xl font-bold text-blue-600">
                   {formatCurrency(discountedPrice)}
                 </p>
-                <p className="text-sm text-gray-500 line-through">
-                  {formatCurrency(rv.price)}
+                <p className="text-sm text-gray-600 mt-1">
+                  or {formatCurrency(calculateMonthlyPayment(discountedPrice))}/mo
+                </p>
+                <p className="text-sm text-gray-500 line-through mt-2">
+                  {formatCurrency(selectedRV.price)}
                 </p>
                 <p className="text-xs text-green-600 font-semibold mt-1">
-                  Save {formatCurrency(rv.price - discountedPrice)} (15% off MSRP)
+                  Save {formatCurrency(selectedRV.price - discountedPrice)} (15% off MSRP)
                 </p>
               </div>
             </div>
@@ -401,8 +477,44 @@ export default function PurchaseWorkflow() {
                   Configure Your RV
                 </h3>
                 <p className="text-gray-600 mb-6">
-                  Select optional upgrades and features for your RV
+                  Select your specific unit and optional upgrades
                 </p>
+
+                {/* Unit Selection - Only show if multiple units available */}
+                {availableUnits.length > 1 && (
+                  <div className="mb-8">
+                    <label className="block text-xl font-bold text-gray-800 mb-4">
+                      Select Specific Unit <span className="text-red-600">*</span>
+                    </label>
+                    <p className="text-sm text-gray-600 mb-4">
+                      We have {availableUnits.length} units of this model available. Please select your preferred unit:
+                    </p>
+                    <div className="space-y-3">
+                      {availableUnits.map((unit) => (
+                        <button
+                          key={unit.stock}
+                          onClick={() => handleStockSelection(unit.stock)}
+                          className={`w-full text-left p-4 border-2 rounded-lg transition-all ${
+                            configurationData.selectedStock === unit.stock
+                              ? 'border-blue-600 bg-blue-50'
+                              : 'border-gray-300 hover:border-gray-400'
+                          }`}
+                        >
+                          <div className="flex justify-between items-center">
+                            <div>
+                              <p className="font-semibold text-gray-900">Stock #{unit.stock}</p>
+                              <p className="text-sm text-gray-600">{unit.location || 'Location TBD'}</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="font-semibold text-blue-600">{formatCurrency(calculateDiscountedPrice(unit.price))}</p>
+                              <p className="text-xs text-gray-500">MSRP: {formatCurrency(unit.price)}</p>
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Delivery Method Toggle */}
                 <div className="mb-8">
@@ -495,281 +607,204 @@ export default function PurchaseWorkflow() {
                     </button>
                   </div>
                   {configurationData.paymentMethod === 'finance' && (
-                    <div className="mt-4 p-4 bg-slate-50 border border-slate-200 rounded-lg">
-                      <p className="text-sm text-slate-900">
-                        <strong>Kiewit Employee Financing:</strong> 0% APR for 120 months
+                    <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                      <p className="text-sm text-blue-900 mb-2">
+                        <strong>Kiewit Financing Benefits:</strong>
                       </p>
-                      <p className="text-sm text-slate-800 mt-2">
-                        <strong>Down Payment Required:</strong> 20% ({formatCurrency(calculateTotalPrice() * 0.20)})
-                      </p>
+                      <ul className="text-sm text-blue-800 space-y-1">
+                        <li>• 0% APR for 120 months (10 years)</li>
+                        <li>• 20% down payment required</li>
+                        <li>• Estimated monthly payment: <strong>{formatCurrency((calculateTotalPrice() * 0.80) / 120)}/mo</strong></li>
+                      </ul>
                     </div>
                   )}
                 </div>
               </div>
 
-              {/* Power Package */}
-              <div>
-                <h4 className="text-xl font-bold text-gray-800 mb-4">Power Package</h4>
-                <div className="grid grid-cols-3 gap-4">
-                  {[
-                    { id: 'standard', name: 'Two Standard RV Batteries', price: 419 },
-                    { id: '6volt', name: 'Two 6-Volt RV Batteries', price: 555 },
-                    { id: 'lithium', name: 'Two Upgraded Lithium RV Batteries', price: 1299 }
-                  ].map((option) => (
-                    <button
-                      key={option.id}
-                      onClick={() => setConfigurationData({ ...configurationData, powerPackage: option.id })}
-                      className={`p-4 border-2 rounded-lg text-center transition-all ${
-                        configurationData.powerPackage === option.id
-                          ? 'border-slate-700 bg-slate-50 shadow-md'
-                          : 'border-gray-300 hover:border-gray-400'
-                      }`}
-                    >
-                      <div className="flex justify-center mb-3">
-                        <svg className="w-12 h-12 text-slate-700" fill="currentColor" viewBox="0 0 24 24">
-                          <path d="M15.67 4H14V2h-4v2H8.33C7.6 4 7 4.6 7 5.33v15.33C7 21.4 7.6 22 8.33 22h7.33c.74 0 1.34-.6 1.34-1.33V5.33C17 4.6 16.4 4 15.67 4zM11 20v-5.5H9L13 7v5.5h2L11 20z"/>
-                        </svg>
-                      </div>
-                      <div className="text-sm font-semibold text-gray-800 mb-2">{option.name}</div>
-                      <div className="text-lg font-bold text-gray-900">+${option.price.toLocaleString()}</div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Hitch Package */}
-              <div>
-                <h4 className="text-xl font-bold text-gray-800 mb-4">Hitch Package</h4>
-                <div className="grid grid-cols-2 gap-4">
-                  {[
-                    { id: 'have-hitch', name: 'I Already Have a Hitch', price: 0 },
-                    { id: 'anti-sway', name: 'Integrated Anti Sway', price: 600 }
-                  ].map((option) => (
-                    <button
-                      key={option.id}
-                      onClick={() => setConfigurationData({ ...configurationData, hitchPackage: option.id })}
-                      className={`p-4 border-2 rounded-lg text-center transition-all ${
-                        configurationData.hitchPackage === option.id
-                          ? 'border-slate-700 bg-slate-50 shadow-md'
-                          : 'border-gray-300 hover:border-gray-400'
-                      }`}
-                    >
-                      <div className="flex justify-center mb-3">
-                        {option.id === 'have-hitch' ? (
-                          <svg className="w-12 h-12 text-slate-700" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3" />
-                          </svg>
-                        ) : (
-                          <svg className="w-12 h-12 text-slate-700" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M20 8h-3V4H3c-1.1 0-2 .9-2 2v11h2c0 1.66 1.34 3 3 3s3-1.34 3-3h6c0 1.66 1.34 3 3 3s3-1.34 3-3h2v-5l-3-4zM6 18.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm13.5-9l1.96 2.5H17V9.5h2.5zm-1.5 9c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
-                          </svg>
-                        )}
-                      </div>
-                      <div className="text-sm font-semibold text-gray-800 mb-2">{option.name}</div>
-                      <div className="text-lg font-bold text-gray-900">
-                        {option.price === 0 ? 'Included' : `+$${option.price.toLocaleString()}`}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Brake Control */}
-              <div>
-                <h4 className="text-xl font-bold text-gray-800 mb-4">Brake Control</h4>
-                <div className="grid grid-cols-2 gap-4">
-                  {[
-                    { id: 'installed', name: 'Already Installed', price: 0 },
-                    { id: 'wireless', name: 'Wireless Brake Control', price: 299 }
-                  ].map((option) => (
-                    <button
-                      key={option.id}
-                      onClick={() => setConfigurationData({ ...configurationData, brakeControl: option.id })}
-                      className={`p-4 border-2 rounded-lg text-center transition-all ${
-                        configurationData.brakeControl === option.id
-                          ? 'border-slate-700 bg-slate-50 shadow-md'
-                          : 'border-gray-300 hover:border-gray-400'
-                      }`}
-                    >
-                      <div className="flex justify-center mb-3">
-                        {option.id === 'installed' ? (
-                          <svg className="w-12 h-12 text-slate-700" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3" />
-                          </svg>
-                        ) : (
-                          <svg className="w-12 h-12 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" />
-                          </svg>
-                        )}
-                      </div>
-                      <div className="text-sm font-semibold text-gray-800 mb-2">{option.name}</div>
-                      <div className="text-lg font-bold text-gray-900">
-                        {option.price === 0 ? 'Included' : `+$${option.price.toLocaleString()}`}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="flex justify-end mt-8 pt-6 border-t border-gray-200">
+              <div className="flex justify-end pt-6 border-t border-gray-200">
                 <button
                   onClick={handleNext}
-                  className="px-6 py-3 bg-[#B43732] text-white text-xs font-bold uppercase tracking-wide rounded hover:bg-[#9A2F2B] transition-colors"
+                  className="px-8 py-3 bg-[#B43732] text-white font-semibold rounded-lg hover:bg-[#9A2F2B] transition-colors"
                 >
-                  Next: Contact Information
+                  Next: Contact Info →
                 </button>
               </div>
             </div>
           )}
 
-          {/* Contact Information Step */}
+          {/* Contact Step */}
           {currentStep === 'contact' && (
             <div className="space-y-6">
-              <h3 className="text-2xl font-bold text-gray-800 mb-6">
-                Contact Information
-              </h3>
+              <div>
+                <h3 className="text-2xl font-bold text-gray-800 mb-6">
+                  Contact Information
+                </h3>
+                <p className="text-gray-600 mb-6">
+                  Provide your contact details so Bish's RV can reach you
+                </p>
+              </div>
 
-              <div className="bg-white border-2 border-gray-300 rounded-lg p-6 space-y-6">
-                {/* First and Last Name Row */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label htmlFor="firstName" className="block text-xl font-bold text-gray-800 mb-4">
-                      First Name
-                    </label>
-                    <input
-                      type="text"
-                      id="firstName"
-                      value={contactData.firstName}
-                      onChange={(e) => setContactData({ ...contactData, firstName: e.target.value })}
-                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-[#B43732] text-gray-800"
-                      placeholder="First name"
-                    />
-                  </div>
-
-                  <div>
-                    <label htmlFor="lastName" className="block text-xl font-bold text-gray-800 mb-4">
-                      Last Name
-                    </label>
-                    <input
-                      type="text"
-                      id="lastName"
-                      value={contactData.lastName}
-                      onChange={(e) => setContactData({ ...contactData, lastName: e.target.value })}
-                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-[#B43732] text-gray-800"
-                      placeholder="Last name"
-                    />
-                  </div>
-                </div>
-
-                {/* Email */}
+              {/* Name Row */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* First Name */}
                 <div>
-                  <label htmlFor="email" className="block text-xl font-bold text-gray-800 mb-4">
-                    Email Address
-                  </label>
-                  <input
-                    type="email"
-                    id="email"
-                    value={contactData.email}
-                    onChange={(e) => setContactData({ ...contactData, email: e.target.value })}
-                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-[#B43732] text-gray-800"
-                    placeholder="Enter your email address"
-                  />
-                </div>
-
-                {/* Phone */}
-                <div>
-                  <label htmlFor="phone" className="block text-xl font-bold text-gray-800 mb-4">
-                    Phone Number
-                  </label>
-                  <input
-                    type="tel"
-                    id="phone"
-                    value={contactData.phone}
-                    onChange={(e) => setContactData({ ...contactData, phone: e.target.value })}
-                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-[#B43732] text-gray-800"
-                    placeholder="Enter your phone number"
-                  />
-                </div>
-
-                {/* Address */}
-                <div>
-                  <label htmlFor="address" className="block text-xl font-bold text-gray-800 mb-4">
-                    Street Address
+                  <label htmlFor="firstName" className="block text-xl font-bold text-gray-800 mb-4">
+                    First Name
                   </label>
                   <input
                     type="text"
-                    id="address"
-                    value={contactData.address}
-                    onChange={(e) => setContactData({ ...contactData, address: e.target.value })}
+                    id="firstName"
+                    value={contactData.firstName}
+                    onChange={(e) => setContactData({ ...contactData, firstName: e.target.value })}
                     className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-[#B43732] text-gray-800"
-                    placeholder="Enter your street address"
+                    placeholder="First Name"
                   />
                 </div>
 
-                {/* City, State, Zip Code Row */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {/* City */}
-                  <div className="md:col-span-1">
-                    <label htmlFor="city" className="block text-xl font-bold text-gray-800 mb-4">
-                      City
-                    </label>
-                    <input
-                      type="text"
-                      id="city"
-                      value={contactData.city}
-                      onChange={(e) => setContactData({ ...contactData, city: e.target.value })}
-                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-[#B43732] text-gray-800"
-                      placeholder="City"
-                    />
-                  </div>
-
-                  {/* State */}
-                  <div className="md:col-span-1">
-                    <label htmlFor="state" className="block text-xl font-bold text-gray-800 mb-4">
-                      State
-                    </label>
-                    <input
-                      type="text"
-                      id="state"
-                      value={contactData.state}
-                      onChange={(e) => setContactData({ ...contactData, state: e.target.value })}
-                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-[#B43732] text-gray-800"
-                      placeholder="State"
-                      maxLength={2}
-                    />
-                  </div>
-
-                  {/* Zip Code */}
-                  <div className="md:col-span-1">
-                    <label htmlFor="zipCode" className="block text-xl font-bold text-gray-800 mb-4">
-                      Zip Code
-                    </label>
-                    <input
-                      type="text"
-                      id="zipCode"
-                      value={contactData.zipCode}
-                      onChange={(e) => setContactData({ ...contactData, zipCode: e.target.value })}
-                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-[#B43732] text-gray-800"
-                      placeholder="Zip Code"
-                      maxLength={10}
-                    />
-                  </div>
+                {/* Last Name */}
+                <div>
+                  <label htmlFor="lastName" className="block text-xl font-bold text-gray-800 mb-4">
+                    Last Name
+                  </label>
+                  <input
+                    type="text"
+                    id="lastName"
+                    value={contactData.lastName}
+                    onChange={(e) => setContactData({ ...contactData, lastName: e.target.value })}
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-[#B43732] text-gray-800"
+                    placeholder="Last Name"
+                  />
                 </div>
               </div>
 
-              {/* Navigation Buttons */}
-              <div className="flex justify-between mt-8 pt-6 border-t border-gray-200">
+              {/* Email */}
+              <div>
+                <label htmlFor="email" className="block text-xl font-bold text-gray-800 mb-4">
+                  Email Address
+                </label>
+                <input
+                  type="email"
+                  id="email"
+                  value={contactData.email}
+                  onChange={(e) => setContactData({ ...contactData, email: e.target.value })}
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-[#B43732] text-gray-800"
+                  placeholder="your.email@example.com"
+                />
+              </div>
+
+              {/* Phone */}
+              <div>
+                <label htmlFor="phone" className="block text-xl font-bold text-gray-800 mb-4">
+                  Phone Number
+                </label>
+                <PatternFormat
+                  id="phone"
+                  format="(###) ###-####"
+                  mask="_"
+                  value={contactData.phone}
+                  onValueChange={(values) => setContactData({ ...contactData, phone: values.formattedValue })}
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-[#B43732] text-gray-800"
+                  placeholder="(555) 123-4567"
+                />
+              </div>
+
+              {/* Address */}
+              <div>
+                <label htmlFor="address" className="block text-xl font-bold text-gray-800 mb-4">
+                  Street Address
+                </label>
+                <Autocomplete
+                  apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}
+                  onPlaceSelected={(place) => {
+                    const address = place.formatted_address || '';
+                    setContactData({ ...contactData, address });
+                    
+                    // Try to extract city, state, zip from place
+                    const components = place.address_components || [];
+                    components.forEach((component: any) => {
+                      if (component.types.includes('locality')) {
+                        setContactData(prev => ({ ...prev, city: component.long_name }));
+                      }
+                      if (component.types.includes('administrative_area_level_1')) {
+                        setContactData(prev => ({ ...prev, state: component.short_name }));
+                      }
+                      if (component.types.includes('postal_code')) {
+                        setContactData(prev => ({ ...prev, zipCode: component.long_name }));
+                      }
+                    });
+                  }}
+                  options={{
+                    types: ['address'],
+                    componentRestrictions: { country: 'us' },
+                  }}
+                  defaultValue={contactData.address}
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-[#B43732] text-gray-800"
+                  placeholder="Start typing your address..."
+                />
+              </div>
+
+              {/* City, State, Zip Code Row */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* City */}
+                <div className="md:col-span-1">
+                  <label htmlFor="city" className="block text-xl font-bold text-gray-800 mb-4">
+                    City
+                  </label>
+                  <input
+                    type="text"
+                    id="city"
+                    value={contactData.city}
+                    onChange={(e) => setContactData({ ...contactData, city: e.target.value })}
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-[#B43732] text-gray-800"
+                    placeholder="City"
+                  />
+                </div>
+
+                {/* State */}
+                <div className="md:col-span-1">
+                  <label htmlFor="state" className="block text-xl font-bold text-gray-800 mb-4">
+                    State
+                  </label>
+                  <input
+                    type="text"
+                    id="state"
+                    value={contactData.state}
+                    onChange={(e) => setContactData({ ...contactData, state: e.target.value })}
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-[#B43732] text-gray-800"
+                    placeholder="State"
+                    maxLength={2}
+                  />
+                </div>
+
+                {/* Zip Code */}
+                <div className="md:col-span-1">
+                  <label htmlFor="zipCode" className="block text-xl font-bold text-gray-800 mb-4">
+                    Zip Code
+                  </label>
+                  <input
+                    type="text"
+                    id="zipCode"
+                    value={contactData.zipCode}
+                    onChange={(e) => setContactData({ ...contactData, zipCode: e.target.value })}
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-[#B43732] text-gray-800"
+                    placeholder="Zip Code"
+                    maxLength={5}
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-between pt-6 border-t border-gray-200">
                 <button
                   onClick={handleBack}
-                  className="px-6 py-3 bg-gray-200 text-gray-700 text-xs font-bold uppercase tracking-wide rounded hover:bg-gray-300 transition-colors"
+                  className="px-8 py-3 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300 transition-colors"
                 >
-                  Back to Configuration
+                  ← Back
                 </button>
                 <button
                   onClick={handleNext}
-                  className="px-6 py-3 bg-[#B43732] text-white text-xs font-bold uppercase tracking-wide rounded hover:bg-[#9A2F2B] transition-colors"
+                  className="px-8 py-3 bg-[#B43732] text-white font-semibold rounded-lg hover:bg-[#9A2F2B] transition-colors"
                 >
-                  Next: Review Purchase
+                  Next: Review →
                 </button>
               </div>
             </div>
@@ -778,77 +813,51 @@ export default function PurchaseWorkflow() {
           {/* Review Step */}
           {currentStep === 'review' && (
             <div className="space-y-6">
-              <h3 className="text-2xl font-bold text-gray-800 mb-6">
-                Review Your Purchase
-              </h3>
+              <div>
+                <h3 className="text-2xl font-bold text-gray-800 mb-6">
+                  Review Your Purchase
+                </h3>
+                <p className="text-gray-600 mb-6">
+                  Please review all details before submitting your purchase request
+                </p>
+              </div>
 
-              {/* Purchase Summary */}
-              <div className="bg-white border-2 border-gray-300 rounded-lg overflow-hidden">
-                <div className="bg-gray-100 px-6 py-3 border-b-2 border-gray-300">
-                  <h4 className="font-bold text-gray-800">DESCRIPTION</h4>
+              {/* Selected Unit */}
+              <div className="bg-gray-50 rounded-lg p-6 border border-gray-200">
+                <h4 className="font-bold text-gray-800 mb-3">Selected Unit</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm text-gray-500">Stock Number</p>
+                    <p className="text-gray-800 font-medium">#{configurationData.selectedStock}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">Location</p>
+                    <p className="text-gray-800 font-medium">{selectedRV.location || 'TBD'}</p>
+                  </div>
                 </div>
-                
-                <div className="divide-y divide-gray-300">
-                  {/* Main Unit */}
-                  <div className="flex justify-between px-6 py-4">
-                    <div>
-                      <div className="font-semibold text-gray-800">
-                        {rv.year} {rv.make}
-                      </div>
-                      <div className="text-sm text-gray-600">{rv.name}</div>
-                      <div className="text-xs text-gray-500 mt-1">Stock #{rv.stock}</div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-sm text-gray-500 line-through">{formatCurrency(rv.price)}</div>
-                      <div className="font-semibold text-gray-800">
-                        {formatCurrency(discountedPrice)}
-                      </div>
-                      <div className="text-xs text-green-600">Kiewit Discount</div>
-                    </div>
+              </div>
+
+              {/* Configuration Summary */}
+              <div className="bg-gray-50 rounded-lg p-6 border border-gray-200">
+                <h4 className="font-bold text-gray-800 mb-3">Configuration</h4>
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-gray-700">Delivery Method:</span>
+                    <span className="font-medium text-gray-900 capitalize">{configurationData.deliveryMethod === 'pickup' ? 'Pick Up' : 'Ship To'}</span>
                   </div>
-
-                  {/* Configuration Items */}
-                  {configurationData.powerPackage && (
-                    <div className="flex justify-between px-6 py-3 bg-gray-50">
-                      <div className="text-sm text-gray-700">
-                        {configurationData.powerPackage === 'standard' && 'Two Standard RV Batteries'}
-                        {configurationData.powerPackage === '6volt' && 'Two 6-Volt RV Batteries'}
-                        {configurationData.powerPackage === 'lithium' && 'Two Upgraded Lithium RV Batteries'}
-                      </div>
-                      <div className="text-sm font-semibold text-gray-800">
-                        {configurationData.powerPackage === 'standard' && formatCurrency(419)}
-                        {configurationData.powerPackage === '6volt' && formatCurrency(555)}
-                        {configurationData.powerPackage === 'lithium' && formatCurrency(1299)}
-                      </div>
+                  {configurationData.deliveryMethod === 'ship' && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-700">Shipping ZIP:</span>
+                      <span className="font-medium text-gray-900">{userZip}</span>
                     </div>
                   )}
-
-                  {configurationData.hitchPackage === 'anti-sway' && (
-                    <div className="flex justify-between px-6 py-3 bg-gray-50">
-                      <div className="text-sm text-gray-700">Integrated Anti Sway Hitch</div>
-                      <div className="text-sm font-semibold text-gray-800">{formatCurrency(600)}</div>
-                    </div>
-                  )}
-
-                  {configurationData.brakeControl === 'wireless' && (
-                    <div className="flex justify-between px-6 py-3 bg-gray-50">
-                      <div className="text-sm text-gray-700">Wireless Brake Control</div>
-                      <div className="text-sm font-semibold text-gray-800">{formatCurrency(299)}</div>
-                    </div>
-                  )}
-
-                  {/* Total */}
-                  <div className="flex justify-between px-6 py-4 bg-blue-50">
-                    <div className="font-bold text-gray-800 text-lg">TOTAL</div>
-                    <div className="font-bold text-blue-600 text-xl">{formatCurrency(calculateTotalPrice())}</div>
-                  </div>
                 </div>
               </div>
 
               {/* Contact Information */}
               <div className="bg-gray-50 rounded-lg p-6 border border-gray-200">
-                <h4 className="font-bold text-gray-800 mb-4">Contact Information</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <h4 className="font-bold text-gray-800 mb-3">Contact Information</h4>
+                <div className="grid grid-cols-2 gap-4">
                   <div>
                     <p className="text-sm text-gray-500">Name</p>
                     <p className="text-gray-800 font-medium">{contactData.firstName} {contactData.lastName}</p>
@@ -904,7 +913,7 @@ export default function PurchaseWorkflow() {
                   onClick={handleSubmit}
                   className="px-6 py-3 bg-[#B43732] text-white text-xs font-bold uppercase tracking-wide rounded hover:bg-[#9A2F2B] transition-colors"
                 >
-                  Submit Purchase Request
+                  Submit Purchase Order
                 </button>
               </div>
             </div>

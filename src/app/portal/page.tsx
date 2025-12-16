@@ -1,13 +1,14 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { RV } from '@/types/inventory';
+import { RV, GroupedRV, groupRVsByModel } from '@/types/inventory';
 import RVCard from '@/components/RVCard';
 import Slider from 'rc-slider';
 import 'rc-slider/assets/index.css';
-import { getCoordinatesFromZip, calculateDistance, getCachedCoordinates, cacheCoordinates } from '@/lib/distance';
+import { getCoordinatesFromZip, calculateDistance, getCachedCoordinates, cacheCoordinates, calculateDrivingDistances, LocationWithCoordinates } from '@/lib/distance';
+import { getAllImages, getDetailUrl } from '@/lib/rvImages';
 
 export default function PortalPage() {
   const router = useRouter();
@@ -28,15 +29,21 @@ export default function PortalPage() {
   
   // User location state for distance calculations
   const [userZip, setUserZip] = useState<string>('');
-  const [userCoordinates, setUserCoordinates] = useState<{ latitude: number; longitude: number } | null>(null);
   const [isGeocodingZip, setIsGeocodingZip] = useState(false);
   const [locationDistances, setLocationDistances] = useState<Map<number, number>>(new Map());
+  const [zipDebounceTimer, setZipDebounceTimer] = useState<NodeJS.Timeout | null>(null);
   
   // Price filter state
   const [minPrice, setMinPrice] = useState<number>(0);
   const [maxPrice, setMaxPrice] = useState<number>(100000);
   const [priceMin, setPriceMin] = useState<string>('');
   const [priceMax, setPriceMax] = useState<string>('');
+  
+  // Monthly payment filter state (will be dynamically set based on max price)
+  const [minMonthlyPayment, setMinMonthlyPayment] = useState<number>(0);
+  const [maxMonthlyPayment, setMaxMonthlyPayment] = useState<number>(10000); // High initial value, will be clamped by dynamic limit
+  const [monthlyPaymentMin, setMonthlyPaymentMin] = useState<string>('');
+  const [monthlyPaymentMax, setMonthlyPaymentMax] = useState<string>('');
   
   // RV Type dropdown state
   const [isRvTypeDropdownOpen, setIsRvTypeDropdownOpen] = useState(false);
@@ -58,6 +65,84 @@ export default function PortalPage() {
   
   // Manufacturer dropdown state
   const [isManufacturerDropdownOpen, setIsManufacturerDropdownOpen] = useState(false);
+
+  // Helper functions for pricing calculations
+  const KIEWIT_DISCOUNT_PERCENT = 0.15; // 15% discount
+  const calculateDiscountedPrice = (price: number) => Math.round(price * (1 - KIEWIT_DISCOUNT_PERCENT));
+  
+  // Calculate monthly payment (0% APR for 120 months)
+  const calculateMonthlyPayment = (price: number): number => {
+    const discountedPrice = calculateDiscountedPrice(price);
+    return Math.round(discountedPrice / 120); // 0% APR, so just divide by months
+  };
+
+  // Calculate dynamic max monthly payment based on current max price or highest inventory price
+  const maxMonthlyPaymentLimit = useMemo(() => {
+    const highestInventoryPrice = inventory.length > 0 ? Math.max(...inventory.map(rv => rv.price || 0)) : 200000;
+    const effectiveMaxPrice = Math.min(maxPrice, highestInventoryPrice);
+    return calculateMonthlyPayment(effectiveMaxPrice);
+  }, [inventory, maxPrice]);
+
+  // Pre-filter inventory once for valid images/URLs (expensive operation)
+  const validInventory = useMemo(() => {
+    return inventory.filter(rv => {
+      if (!rv.price || rv.price <= 0) return false;
+      if (!rv.stock) return false;
+      const hasImages = getAllImages(rv.stock).length > 0;
+      const hasDetailUrl = getDetailUrl(rv.stock) !== undefined;
+      return hasImages && hasDetailUrl;
+    });
+  }, [inventory]);
+
+  // Client-side filtering (type, price, sleeps, manufacturer, distance, and monthly payment)
+  const filteredInventory = useMemo(() => {
+    return validInventory.filter(rv => {
+      // Filter by manufacturer
+      if (selectedManufacturers.length > 0 && !selectedManufacturers.includes(rv.manufacturer)) return false;
+      // Filter by RV type
+      if (selectedTypes.length > 0 && !selectedTypes.includes(rv.type)) return false;
+      // Filter by price
+      if (minPrice > 0 && rv.price < minPrice) return false;
+      if (maxPrice < 200000 && rv.price > maxPrice) return false;
+      // Filter by monthly payment
+      const monthlyPayment = calculateMonthlyPayment(rv.price);
+      if (minMonthlyPayment > 0 && monthlyPayment < minMonthlyPayment) return false;
+      if (maxMonthlyPayment < maxMonthlyPaymentLimit && monthlyPayment > maxMonthlyPayment) return false;
+      // Filter by sleeps
+      if (minSleeps > 0 && rv.sleeps < minSleeps) return false;
+      // Filter by distance (if user has calculated distances)
+      if (locationDistances.size > 0 && maxDistance < 10000 && rv.cmfId) {
+        const distance = locationDistances.get(rv.cmfId);
+        if (distance !== undefined && distance > maxDistance) return false;
+      }
+      return true;
+    });
+  }, [validInventory, selectedManufacturers, selectedTypes, minPrice, maxPrice, minMonthlyPayment, maxMonthlyPayment, minSleeps, locationDistances, maxDistance]);
+
+  // Memoize benefits banner calculation
+  const benefitsSavingsText = useMemo(() => {
+    if (filteredInventory.length === 0) return null;
+    // Calculate max total savings (price discount + financing savings)
+    const maxSavings = Math.max(...filteredInventory.map(rv => {
+      const discountedPrice = calculateDiscountedPrice(rv.price);
+      const priceSavings = rv.price - discountedPrice;
+      // Calculate financing savings
+      const typicalAPR = 0.0899;
+      const financingMonths = 120;
+      const monthlyRate = typicalAPR / 12;
+      const typicalMonthlyPayment = discountedPrice * (monthlyRate * Math.pow(1 + monthlyRate, financingMonths)) / (Math.pow(1 + monthlyRate, financingMonths) - 1);
+      const kiewitTotalPaid = discountedPrice; // 0% APR
+      const typicalTotalPaid = typicalMonthlyPayment * financingMonths;
+      const financingSavings = typicalTotalPaid - kiewitTotalPaid;
+      return Math.round(priceSavings + financingSavings);
+    }));
+    return <span>Save up to <strong>${maxSavings.toLocaleString()}</strong> per vehicle.</span>;
+  }, [filteredInventory]);
+
+  // Group filtered inventory by model
+  const groupedInventory = useMemo(() => {
+    return groupRVsByModel(filteredInventory);
+  }, [filteredInventory]);
 
   // Fetch locations and unit classes on mount
   useEffect(() => {
@@ -130,64 +215,82 @@ export default function PortalPage() {
     fetchInventory();
   }, [selectedLocation, locations, isLoadingOptions]);
 
-  // Handle zip code changes and geocoding
-  const handleZipCodeChange = async (zip: string) => {
+  // Handle Calculate Distance button click
+  const handleCalculateDistance = async () => {
+    const zip = userZip.trim();
     if (zip.length !== 5) return;
     
     setIsGeocodingZip(true);
     
     try {
-      // Check cache first
-      const cached = getCachedCoordinates(zip);
-      if (cached) {
-        setUserCoordinates(cached);
-        calculateDistancesToLocations(cached);
-        setIsGeocodingZip(false);
-        return;
-      }
-      
-      // Geocode the zip
-      const coords = await getCoordinatesFromZip(zip);
-      if (coords) {
-        setUserCoordinates(coords);
-        cacheCoordinates(zip, coords);
-        calculateDistancesToLocations(coords);
-        // Save zip code to localStorage for use on purchase page
-        localStorage.setItem('userZip', zip);
-      } else {
-        console.warn('Could not geocode zip code:', zip);
-        setUserCoordinates(null);
-        setLocationDistances(new Map());
-      }
+      // Calculate driving distances using Google Maps Distance Matrix API
+      await calculateDistancesToLocations(zip);
+      // Save zip code to localStorage for use on purchase page
+      localStorage.setItem('userZip', zip);
     } catch (error) {
-      console.error('Error geocoding zip code:', error);
-      setUserCoordinates(null);
+      console.error('Error calculating distances:', error);
       setLocationDistances(new Map());
     } finally {
       setIsGeocodingZip(false);
     }
   };
   
-  // Calculate distances to all locations using database coordinates
-  const calculateDistancesToLocations = (userCoords: { latitude: number; longitude: number }) => {
-    const distances = new Map<number, number>();
+  // Handle zip code input with debouncing for auto-calculation
+  const handleZipChange = (value: string) => {
+    setUserZip(value);
     
-    for (const location of locations) {
-      // Use coordinates directly from database - no geocoding needed!
-      if (location.latitude !== null && location.longitude !== null) {
+    // Clear existing timer
+    if (zipDebounceTimer) {
+      clearTimeout(zipDebounceTimer);
+    }
+    
+    // If we have a valid 5-digit zip, debounce the auto-calculation
+    if (value.length === 5) {
+      const timer = setTimeout(async () => {
+        // Auto-calculate driving distances
         try {
-          const distance = calculateDistance(
-            userCoords.latitude,
-            userCoords.longitude,
-            location.latitude,
-            location.longitude
-          );
-          distances.set(location.cmf, distance);
+          await calculateDistancesToLocations(value);
         } catch (error) {
-          console.error(`Error calculating distance for location ${location.cmf}:`, error);
+          console.error('Error auto-calculating distances:', error);
+        }
+      }, 500); // 500ms debounce
+      setZipDebounceTimer(timer);
+    }
+  };
+  
+  // Calculate driving distances to all unique locations using Google Maps Distance Matrix API
+  const calculateDistancesToLocations = async (zipCode: string) => {
+    // Extract unique locations from filtered inventory that have coordinates
+    const uniqueLocations: LocationWithCoordinates[] = [];
+    const seenLocations = new Set<number>();
+    
+    for (const rv of filteredInventory) {
+      if (rv.cmfId && !seenLocations.has(rv.cmfId)) {
+        const location = locations.find(loc => loc.cmf === rv.cmfId);
+        if (location && location.latitude !== null && location.longitude !== null) {
+          uniqueLocations.push({
+            locationId: rv.cmfId.toString(),
+            latitude: location.latitude,
+            longitude: location.longitude
+          });
+          seenLocations.add(rv.cmfId);
         }
       }
     }
+    
+    if (uniqueLocations.length === 0) {
+      setLocationDistances(new Map());
+      return;
+    }
+    
+    // Make batch API call to get driving distances
+    const results = await calculateDrivingDistances(zipCode, uniqueLocations);
+    
+    // Convert results to Map<cmf, distance>
+    const distances = new Map<number, number>();
+    Object.entries(results).forEach(([locationId, distance]) => {
+      distances.set(parseInt(locationId), distance);
+    });
     
     setLocationDistances(distances);
   };
@@ -242,10 +345,6 @@ export default function PortalPage() {
     );
   }
 
-  // Calculate Kiewit employee discount (15% off)
-  const KIEWIT_DISCOUNT_PERCENT = 0.15;
-  const calculateDiscountedPrice = (price: number) => Math.round(price * (1 - KIEWIT_DISCOUNT_PERCENT));
-  
   // Get unique manufacturers from inventory
   const uniqueManufacturers = Array.from(new Set(inventory.map(rv => rv.manufacturer).filter(Boolean))).sort();
   
@@ -254,29 +353,8 @@ export default function PortalPage() {
     console.log('Available manufacturers:', uniqueManufacturers);
   }
   
-  // Client-side filtering (type, price, sleeps, manufacturer, and distance)
-  const filteredInventory = inventory.filter(rv => {
-    // Exclude RVs with no price (0 or null)
-    if (!rv.price || rv.price <= 0) return false;
-    // Filter by manufacturer
-    if (selectedManufacturers.length > 0 && !selectedManufacturers.includes(rv.manufacturer)) return false;
-    // Filter by RV type
-    if (selectedTypes.length > 0 && !selectedTypes.includes(rv.type)) return false;
-    // Filter by price
-    if (minPrice > 0 && rv.price < minPrice) return false;
-    if (maxPrice < 200000 && rv.price > maxPrice) return false;
-    // Filter by sleeps
-    if (minSleeps > 0 && rv.sleeps < minSleeps) return false;
-    // Filter by distance (if user has entered a zip code)
-    if (userCoordinates && maxDistance < 10000 && rv.cmfId) {
-      const distance = locationDistances.get(rv.cmfId);
-      if (distance !== undefined && distance > maxDistance) return false;
-    }
-    return true;
-  });
-  
-  // Sort filtered inventory
-  const sortedInventory = [...filteredInventory].sort((a, b) => {
+  // Sort grouped inventory
+  const sortedInventory = [...groupedInventory].sort((a, b) => {
     if (sortBy === 'price-asc') {
       return a.price - b.price;
     } else if (sortBy === 'price-desc') {
@@ -286,9 +364,26 @@ export default function PortalPage() {
       const savingsB = b.price * KIEWIT_DISCOUNT_PERCENT;
       return savingsB - savingsA;
     } else if (sortBy === 'distance-asc') {
-      // Sort by distance (closest first)
-      const distanceA = a.cmfId ? locationDistances.get(a.cmfId) : undefined;
-      const distanceB = b.cmfId ? locationDistances.get(b.cmfId) : undefined;
+      // For grouped RVs, use the closest location
+      let distanceA: number | undefined;
+      let distanceB: number | undefined;
+      
+      if (a.multipleLocations) {
+        // Find closest location in the group
+        const distances = a.units.map(rv => rv.cmfId ? locationDistances.get(rv.cmfId) : undefined).filter(d => d !== undefined) as number[];
+        distanceA = distances.length > 0 ? Math.min(...distances) : undefined;
+      } else {
+        distanceA = a.cmfId ? locationDistances.get(a.cmfId) : undefined;
+      }
+      
+      if (b.multipleLocations) {
+        // Find closest location in the group
+        const distances = b.units.map(rv => rv.cmfId ? locationDistances.get(rv.cmfId) : undefined).filter(d => d !== undefined) as number[];
+        distanceB = distances.length > 0 ? Math.min(...distances) : undefined;
+      } else {
+        distanceB = b.cmfId ? locationDistances.get(b.cmfId) : undefined;
+      }
+      
       // Put items without distance at the end
       if (distanceA === undefined && distanceB === undefined) return 0;
       if (distanceA === undefined) return 1;
@@ -298,8 +393,8 @@ export default function PortalPage() {
     return 0;
   });
 
-  const totalRegularPrice = sortedInventory.reduce((sum, rv) => sum + rv.price, 0);
-  const totalDiscountedPrice = sortedInventory.reduce((sum, rv) => sum + calculateDiscountedPrice(rv.price), 0);
+  const totalRegularPrice = sortedInventory.reduce((sum, rv) => sum + (rv.price * rv.quantity), 0);
+  const totalDiscountedPrice = sortedInventory.reduce((sum, rv) => sum + (calculateDiscountedPrice(rv.price) * rv.quantity), 0);
   const totalSavings = totalRegularPrice - totalDiscountedPrice;
   
   // Filter unit classes to only show those that have RVs in the current location(s)
@@ -380,22 +475,18 @@ export default function PortalPage() {
                 value={userZip}
                 onChange={(e) => {
                   const zip = e.target.value.replace(/\D/g, '').slice(0, 5);
-                  setUserZip(zip);
+                  handleZipChange(zip);
                 }}
                 onKeyPress={(e) => {
                   if (e.key === 'Enter' && userZip.length === 5) {
-                    handleZipCodeChange(userZip);
+                    handleCalculateDistance();
                   }
                 }}
                 className="w-36 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:border-slate-600 focus:ring-1 focus:ring-slate-200 focus:outline-none"
                 maxLength={5}
               />
               <button
-                onClick={() => {
-                  if (userZip.length === 5) {
-                    handleZipCodeChange(userZip);
-                  }
-                }}
+                onClick={handleCalculateDistance}
                 disabled={userZip.length !== 5 || isGeocodingZip}
                 className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
               >
@@ -418,7 +509,7 @@ export default function PortalPage() {
         {/* Benefits Banner */}
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
           <p className="text-sm text-blue-800">
-            <strong>Your Benefits:</strong> 15% off MSRP + 0% financing for 120 months. {filteredInventory.length > 0 && <span>Save up to <strong>${(Math.max(...filteredInventory.map(rv => rv.price * KIEWIT_DISCOUNT_PERCENT))).toLocaleString()}</strong> per vehicle.</span>}
+            <strong>Your Benefits:</strong> 15% off MSRP + 0% financing for 120 months. {benefitsSavingsText}
           </p>
         </div>
 
@@ -782,6 +873,111 @@ export default function PortalPage() {
                   </div>
                 </div>
 
+                {/* Monthly Payment Filter */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Monthly Payment
+                  </label>
+                  <div className="space-y-3">
+                    {/* Monthly Payment Slider */}
+                    <div className="px-1">
+                      <div className="flex mb-2 items-center justify-between text-xs text-gray-600">
+                        <span>${minMonthlyPayment.toLocaleString()}/mo</span>
+                        <span>${maxMonthlyPayment.toLocaleString()}/mo</span>
+                      </div>
+                      <Slider
+                        range
+                        min={0}
+                        max={maxMonthlyPaymentLimit}
+                        step={50}
+                        value={[minMonthlyPayment, Math.min(maxMonthlyPayment, maxMonthlyPaymentLimit)]}
+                        onChange={(value) => {
+                          if (Array.isArray(value)) {
+                            setMinMonthlyPayment(value[0]);
+                            setMaxMonthlyPayment(value[1]);
+                            setMonthlyPaymentMin(value[0].toString());
+                            setMonthlyPaymentMax(value[1].toString());
+                          }
+                        }}
+                        styles={{
+                          track: {
+                            backgroundColor: '#475569',
+                            height: 6,
+                          },
+                          rail: {
+                            backgroundColor: '#e5e7eb',
+                            height: 6,
+                          },
+                          handle: {
+                            backgroundColor: '#475569',
+                            borderColor: '#475569',
+                            opacity: 1,
+                            width: 14,
+                            height: 14,
+                            marginTop: -4,
+                          },
+                        }}
+                      />
+                    </div>
+
+                    {/* Monthly Payment Input Fields */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">
+                          Min Payment
+                        </label>
+                        <div className="relative">
+                          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500 text-xs">$</span>
+                          <input
+                            type="number"
+                            value={monthlyPaymentMin}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              setMonthlyPaymentMin(value);
+                              if (value) {
+                                const numValue = Number(value);
+                                if (numValue >= 0 && numValue <= maxMonthlyPayment) {
+                                  setMinMonthlyPayment(numValue);
+                                }
+                              } else {
+                                setMinMonthlyPayment(0);
+                              }
+                            }}
+                            placeholder="0"
+                            className="w-full pl-5 pr-2 py-1.5 text-xs border border-gray-300 rounded-lg focus:border-slate-600 focus:ring-1 focus:ring-slate-200 focus:outline-none"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">
+                          Max Payment
+                        </label>
+                        <div className="relative">
+                          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500 text-xs">$</span>
+                          <input
+                            type="number"
+                            value={monthlyPaymentMax}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              setMonthlyPaymentMax(value);
+                              if (value) {
+                                const numValue = Number(value);
+                                if (numValue >= minMonthlyPayment && numValue <= maxMonthlyPaymentLimit) {
+                                  setMaxMonthlyPayment(numValue);
+                                }
+                              } else {
+                                setMaxMonthlyPayment(maxMonthlyPaymentLimit);
+                              }
+                            }}
+                            placeholder={maxMonthlyPaymentLimit.toString()}
+                            className="w-full pl-5 pr-2 py-1.5 text-xs border border-gray-300 rounded-lg focus:border-slate-600 focus:ring-1 focus:ring-slate-200 focus:outline-none"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Sleeps Filter */}
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -819,7 +1015,7 @@ export default function PortalPage() {
                       value={maxDistance}
                       onChange={(e) => setMaxDistance(Number(e.target.value))}
                       className="w-full appearance-none px-3 py-2 pr-8 bg-white border border-gray-300 rounded-lg text-sm text-gray-900 focus:border-slate-600 focus:ring-1 focus:ring-slate-200 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
-                      disabled={!userCoordinates || isLoadingInventory}
+                      disabled={locationDistances.size === 0 || isLoadingInventory}
                     >
                       <option value={10000}>Any Distance</option>
                       <option value={50}>Within 50 miles</option>
@@ -834,7 +1030,7 @@ export default function PortalPage() {
                       </svg>
                     </div>
                   </div>
-                  {!userCoordinates && (
+                  {locationDistances.size === 0 && (
                     <p className="mt-1 text-xs text-gray-500">Enter a ZIP code above to enable distance filtering</p>
                   )}
                 </div>
@@ -876,7 +1072,7 @@ export default function PortalPage() {
                   <option value="price-asc">Price: Low to High</option>
                   <option value="price-desc">Price: High to Low</option>
                   <option value="discount-desc">Highest Discount</option>
-                  {userCoordinates && <option value="distance-asc">Distance (Nearest)</option>}
+                  {locationDistances.size > 0 && <option value="distance-asc">Distance (Nearest)</option>}
                 </select>
               </div>
               
@@ -899,7 +1095,11 @@ export default function PortalPage() {
                 <span className="text-sm text-gray-600">per page</span>
               </div>
               <div className="text-sm text-gray-600">
-                Showing {totalItems === 0 ? 0 : startIndex + 1} - {Math.min(endIndex, totalItems)} of {totalItems} RVs
+                Showing {totalItems === 0 ? 0 : startIndex + 1} - {Math.min(endIndex, totalItems)} of {totalItems} models
+                {(() => {
+                  const totalUnits = sortedInventory.reduce((sum, rv) => sum + rv.quantity, 0);
+                  return totalUnits > totalItems ? ` (${totalUnits} total units)` : '';
+                })()}
               </div>
             </div>
 
@@ -927,10 +1127,28 @@ export default function PortalPage() {
                   // Find the full RV type description
                   const rvTypeDescription = unitClasses.find(uc => uc.class === rv.type)?.class_description || undefined;
                   
-                  // Get distance for this RV's location
-                  const distanceInMiles = rv.cmfId && locationDistances.has(rv.cmfId) 
-                    ? locationDistances.get(rv.cmfId)! 
-                    : null;
+                  // Calculate distance to nearest location for grouped RVs
+                  let distanceInMiles: number | null = null;
+                  if (rv.multipleLocations) {
+                    // Find the closest location among all units
+                    const distances = rv.units
+                      .map(unit => unit.cmfId && locationDistances.has(unit.cmfId) ? locationDistances.get(unit.cmfId)! : null)
+                      .filter(d => d !== null) as number[];
+                    distanceInMiles = distances.length > 0 ? Math.min(...distances) : null;
+                  } else {
+                    // Single location - use its distance
+                    distanceInMiles = rv.cmfId && locationDistances.has(rv.cmfId) ? locationDistances.get(rv.cmfId)! : null;
+                  }
+                  
+                  // Get location names for tooltip (for grouped RVs with multiple locations)
+                  const locationNames = rv.multipleLocations 
+                    ? rv.units
+                        .map(unit => {
+                          const loc = locations.find(l => l.cmf === unit.cmfId);
+                          return loc ? loc.storename || loc.location : null;
+                        })
+                        .filter((name, index, self) => name && self.indexOf(name) === index) // unique names only
+                    : [];
 
                   return (
                     <RVCard
@@ -940,6 +1158,7 @@ export default function PortalPage() {
                       typeDescription={rvTypeDescription}
                       locations={locations}
                       distanceInMiles={distanceInMiles}
+                      locationNames={locationNames as string[]}
                     />
                   );
                 })}
@@ -1281,6 +1500,111 @@ export default function PortalPage() {
                     </div>
                   </div>
 
+                  {/* Monthly Payment Filter */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Monthly Payment
+                    </label>
+                    <div className="space-y-3">
+                      {/* Monthly Payment Slider */}
+                      <div className="px-1">
+                        <div className="flex mb-2 items-center justify-between text-xs text-gray-600">
+                          <span>${minMonthlyPayment.toLocaleString()}/mo</span>
+                          <span>${maxMonthlyPayment.toLocaleString()}/mo</span>
+                        </div>
+                        <Slider
+                          range
+                          min={0}
+                          max={maxMonthlyPaymentLimit}
+                          step={50}
+                          value={[minMonthlyPayment, Math.min(maxMonthlyPayment, maxMonthlyPaymentLimit)]}
+                          onChange={(value) => {
+                            if (Array.isArray(value)) {
+                              setMinMonthlyPayment(value[0]);
+                              setMaxMonthlyPayment(value[1]);
+                              setMonthlyPaymentMin(value[0].toString());
+                              setMonthlyPaymentMax(value[1].toString());
+                            }
+                          }}
+                          styles={{
+                            track: {
+                              backgroundColor: '#475569',
+                              height: 6,
+                            },
+                            rail: {
+                              backgroundColor: '#e5e7eb',
+                              height: 6,
+                            },
+                            handle: {
+                              backgroundColor: '#475569',
+                              borderColor: '#475569',
+                              opacity: 1,
+                              width: 14,
+                              height: 14,
+                              marginTop: -4,
+                            },
+                          }}
+                        />
+                      </div>
+
+                      {/* Monthly Payment Input Fields */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">
+                            Min Payment
+                          </label>
+                          <div className="relative">
+                            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500 text-xs">$</span>
+                            <input
+                              type="number"
+                              value={monthlyPaymentMin}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                setMonthlyPaymentMin(value);
+                                if (value) {
+                                  const numValue = Number(value);
+                                  if (numValue >= 0 && numValue <= maxMonthlyPayment) {
+                                    setMinMonthlyPayment(numValue);
+                                  }
+                                } else {
+                                  setMinMonthlyPayment(0);
+                                }
+                              }}
+                              placeholder="0"
+                              className="w-full pl-5 pr-2 py-1.5 text-xs border border-gray-300 rounded-lg focus:border-slate-600 focus:ring-1 focus:ring-slate-200 focus:outline-none"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">
+                            Max Payment
+                          </label>
+                          <div className="relative">
+                            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500 text-xs">$</span>
+                            <input
+                              type="number"
+                              value={monthlyPaymentMax}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                setMonthlyPaymentMax(value);
+                                if (value) {
+                                  const numValue = Number(value);
+                                  if (numValue >= minMonthlyPayment && numValue <= maxMonthlyPaymentLimit) {
+                                    setMaxMonthlyPayment(numValue);
+                                  }
+                                } else {
+                                  setMaxMonthlyPayment(maxMonthlyPaymentLimit);
+                                }
+                              }}
+                              placeholder={maxMonthlyPaymentLimit.toString()}
+                              className="w-full pl-5 pr-2 py-1.5 text-xs border border-gray-300 rounded-lg focus:border-slate-600 focus:ring-1 focus:ring-slate-200 focus:outline-none"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
                   {/* Sleeps Filter */}
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -1318,7 +1642,7 @@ export default function PortalPage() {
                         value={maxDistance}
                         onChange={(e) => setMaxDistance(Number(e.target.value))}
                         className="w-full appearance-none px-3 py-2 pr-8 bg-white border border-gray-300 rounded-lg text-sm text-gray-900 focus:border-slate-600 focus:ring-1 focus:ring-slate-200 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
-                        disabled={!userCoordinates || isLoadingInventory}
+                        disabled={locationDistances.size === 0 || isLoadingInventory}
                       >
                         <option value={10000}>Any Distance</option>
                         <option value={50}>Within 50 miles</option>
@@ -1333,7 +1657,7 @@ export default function PortalPage() {
                         </svg>
                       </div>
                     </div>
-                    {!userCoordinates && (
+                    {locationDistances.size === 0 && (
                       <p className="mt-1 text-xs text-gray-500">Enter a ZIP code above to enable distance filtering</p>
                     )}
                   </div>
