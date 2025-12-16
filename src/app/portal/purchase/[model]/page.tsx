@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { RV } from '@/types/inventory';
 import Image from 'next/image';
 import { getPrimaryImage } from '@/lib/rvImages';
 import Autocomplete from 'react-google-autocomplete';
 import { PatternFormat } from 'react-number-format';
+import { calculateDrivingDistances, LocationWithCoordinates } from '@/lib/distance';
 
 type Step = 'configuration' | 'contact' | 'review';
 
@@ -17,6 +18,11 @@ interface ConfigurationData {
   paymentMethod: 'cash' | 'finance';
   deliveryMethod: 'pickup' | 'ship';
   selectedStock?: string; // Which specific unit the user selects
+  shippingAddressSameAsCustomer?: boolean; // Whether shipping address equals customer address
+  shippingAddress?: string;
+  shippingCity?: string;
+  shippingState?: string;
+  shippingZipCode?: string;
 }
 
 interface ContactData {
@@ -52,6 +58,10 @@ export default function PurchaseWorkflow() {
   const [userEmail, setUserEmail] = useState('');
   const [availableUnits, setAvailableUnits] = useState<RV[]>([]); // All units of this model
   const [selectedRV, setSelectedRV] = useState<RV | null>(null); // Currently selected unit
+  const [locations, setLocations] = useState<Array<{ cmf: number; location: string; storename: string; latitude: number | null; longitude: number | null }>>([]);
+  const [unitDistances, setUnitDistances] = useState<Map<string, number>>(new Map()); // Map of stock number to distance in miles
+  const [isCalculatingDistances, setIsCalculatingDistances] = useState(false);
+  const [sortBy, setSortBy] = useState<'distance' | 'price'>('price'); // How to sort available units - default to price
   const [currentStep, setCurrentStep] = useState<Step>('configuration');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSignatureModal, setShowSignatureModal] = useState(false);
@@ -61,7 +71,8 @@ export default function PurchaseWorkflow() {
 
   const [configurationData, setConfigurationData] = useState<ConfigurationData>({
     paymentMethod: 'cash',
-    deliveryMethod: 'ship',
+    deliveryMethod: 'pickup',
+    shippingAddressSameAsCustomer: true,
   });
 
   const [contactData, setContactData] = useState<ContactData>({
@@ -113,6 +124,7 @@ export default function PurchaseWorkflow() {
         }
         
         const locations = locationsResult.data.locations;
+        setLocations(locations); // Store locations in state
         const allLocationIds = locations.map((loc: any) => loc.cmf).join(',');
         
         // Get all inventory from all locations
@@ -165,6 +177,18 @@ export default function PurchaseWorkflow() {
     fetchModelUnits();
   }, [modelSlug, router]);
 
+  // Calculate distances when customer enters address for either pickup or ship-to
+  useEffect(() => {
+    // For pickup: use customer ZIP code
+    if (configurationData.deliveryMethod === 'pickup' && contactData.zipCode.length === 5 && availableUnits.length > 0 && locations.length > 0) {
+      calculateDistancesToUnits(contactData.zipCode);
+    }
+    // For ship-to: use shipping ZIP code
+    else if (configurationData.deliveryMethod === 'ship' && configurationData.shippingZipCode?.length === 5 && availableUnits.length > 0 && locations.length > 0) {
+      calculateDistancesToUnits(configurationData.shippingZipCode);
+    }
+  }, [contactData.zipCode, configurationData.deliveryMethod, configurationData.shippingZipCode, availableUnits.length, locations.length]);
+
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -176,6 +200,45 @@ export default function PurchaseWorkflow() {
   const calculateDiscountedPrice = (originalPrice: number) => {
     return Math.round(originalPrice * (1 - KIEWIT_DISCOUNT_PERCENT));
   };
+
+  const calculateShippingCost = (distanceInMiles: number) => {
+    const COST_PER_MILE = 2.50;
+    return distanceInMiles * COST_PER_MILE;
+  };
+
+  // Sort available units based on selected sort option
+  const sortedUnits = useMemo(() => {
+    const units = [...availableUnits];
+    const isShipTo = configurationData.deliveryMethod === 'ship';
+    
+    if (sortBy === 'distance' && unitDistances.size > 0) {
+      // Sort by distance (closest first)
+      units.sort((a, b) => {
+        const distA = unitDistances.get(a.stock) ?? Infinity;
+        const distB = unitDistances.get(b.stock) ?? Infinity;
+        return distA - distB;
+      });
+    } else if (sortBy === 'price') {
+      // Sort by price - use grand total if ship-to is selected
+      units.sort((a, b) => {
+        const priceA = calculateDiscountedPrice(a.price);
+        const priceB = calculateDiscountedPrice(b.price);
+        
+        // If ship-to, add shipping cost to get grand total
+        if (isShipTo) {
+          const distanceA = unitDistances.get(a.stock);
+          const distanceB = unitDistances.get(b.stock);
+          const shippingA = distanceA ? calculateShippingCost(distanceA) : 0;
+          const shippingB = distanceB ? calculateShippingCost(distanceB) : 0;
+          return (priceA + shippingA) - (priceB + shippingB);
+        }
+        
+        return priceA - priceB;
+      });
+    }
+    
+    return units;
+  }, [availableUnits, sortBy, unitDistances, configurationData.deliveryMethod]);
 
   const calculateMonthlyPayment = (price: number) => {
     const DOWN_PAYMENT_PERCENT = 0.20;
@@ -189,6 +252,75 @@ export default function PurchaseWorkflow() {
     const monthlyPayment = loanAmount * (monthlyRate * Math.pow(1 + monthlyRate, MONTHS)) / (Math.pow(1 + monthlyRate, MONTHS) - 1);
 
     return Math.round(monthlyPayment);
+  };
+
+  const calculateShippingMonthlyPayment = (totalShippingCost: number) => {
+    const SHIPPING_FINANCE_MONTHS = 120;
+    return totalShippingCost / SHIPPING_FINANCE_MONTHS;
+  };
+
+  const getFullLocationName = (unit: RV) => {
+    // Try to find location by cmfId first
+    if (unit.cmfId) {
+      const locationData = locations.find(loc => loc.cmf === unit.cmfId);
+      if (locationData) {
+        return locationData.storename;
+      }
+    }
+    // Fall back to the location string if available
+    return unit.location || 'Location TBD';
+  };
+
+  const calculateDistancesToUnits = async (zipCode: string) => {
+    if (!zipCode || zipCode.length !== 5) return;
+    if (availableUnits.length === 0) return;
+    
+    setIsCalculatingDistances(true);
+    
+    try {
+      // Get unique locations from available units with coordinates
+      const uniqueLocations = new Map<number, LocationWithCoordinates>();
+      
+      availableUnits.forEach(unit => {
+        if (unit.cmfId) {
+          const locationData = locations.find(loc => loc.cmf === unit.cmfId);
+          if (locationData && locationData.latitude && locationData.longitude && !uniqueLocations.has(unit.cmfId)) {
+            uniqueLocations.set(unit.cmfId, {
+              locationId: unit.cmfId.toString(),
+              latitude: locationData.latitude,
+              longitude: locationData.longitude
+            });
+          }
+        }
+      });
+
+      if (uniqueLocations.size === 0) {
+        console.log('No locations with coordinates found');
+        setIsCalculatingDistances(false);
+        return;
+      }
+
+      // Calculate distances using the batch API
+      const locationArray = Array.from(uniqueLocations.values());
+      const distances = await calculateDrivingDistances(zipCode, locationArray);
+      
+      // Map distances to each unit by their cmfId
+      const unitDistanceMap = new Map<string, number>();
+      availableUnits.forEach(unit => {
+        if (unit.cmfId) {
+          const distance = distances[unit.cmfId.toString()];
+          if (distance !== undefined) {
+            unitDistanceMap.set(unit.stock, distance);
+          }
+        }
+      });
+      
+      setUnitDistances(unitDistanceMap);
+    } catch (error) {
+      console.error('Error calculating distances to units:', error);
+    } finally {
+      setIsCalculatingDistances(false);
+    }
   };
 
   const calculateTotalPrice = () => {
@@ -217,17 +349,80 @@ export default function PurchaseWorkflow() {
 
   const handleNext = () => {
     if (currentStep === 'configuration') {
+      // Validate customer information
+      if (!contactData.firstName.trim()) {
+        alert('Please enter your first name.');
+        return;
+      }
+      if (!contactData.lastName.trim()) {
+        alert('Please enter your last name.');
+        return;
+      }
+      if (!contactData.email.trim() || !contactData.email.includes('@')) {
+        alert('Please enter a valid email address.');
+        return;
+      }
+      const phoneDigits = contactData.phone.replace(/\D/g, '');
+      if (!contactData.phone.trim() || phoneDigits.length !== 10) {
+        alert('Please enter a valid 10-digit phone number.');
+        return;
+      }
+      if (!contactData.address.trim()) {
+        alert('Please enter your street address.');
+        return;
+      }
+      if (!contactData.city.trim()) {
+        alert('Please enter your city.');
+        return;
+      }
+      if (!contactData.state.trim()) {
+        alert('Please select your state.');
+        return;
+      }
+      if (!contactData.zipCode.trim() || contactData.zipCode.length !== 5) {
+        alert('Please enter a valid 5-digit ZIP code.');
+        return;
+      }
+      
       // Validate stock selection
       if (!configurationData.selectedStock) {
         alert('Please select a specific unit.');
         return;
       }
-      // Validate ZIP code if Ship To is selected
-      if (configurationData.deliveryMethod === 'ship' && userZip.length !== 5) {
-        alert('Please enter a valid 5-digit ZIP code for shipping.');
-        return;
+      
+      // Validate shipping address if Ship To is selected
+      if (configurationData.deliveryMethod === 'ship') {
+        // If checkbox is checked, copy customer address to shipping address
+        if (configurationData.shippingAddressSameAsCustomer) {
+          setConfigurationData(prev => ({
+            ...prev,
+            shippingAddress: contactData.address,
+            shippingCity: contactData.city,
+            shippingState: contactData.state,
+            shippingZipCode: contactData.zipCode,
+          }));
+        } else {
+          // Validate separate shipping address
+          if (!configurationData.shippingAddress?.trim()) {
+            alert('Please enter your shipping address.');
+            return;
+          }
+          if (!configurationData.shippingCity?.trim()) {
+            alert('Please enter your shipping city.');
+            return;
+          }
+          if (!configurationData.shippingState?.trim()) {
+            alert('Please enter your shipping state.');
+            return;
+          }
+          if (!configurationData.shippingZipCode?.trim() || configurationData.shippingZipCode.length !== 5) {
+            alert('Please enter a valid 5-digit ZIP code for shipping.');
+            return;
+          }
+        }
       }
-      setCurrentStep('contact');
+      
+      setCurrentStep('review');
     } else if (currentStep === 'contact') {
       // Validate contact information
       if (!contactData.firstName.trim()) {
@@ -269,8 +464,6 @@ export default function PurchaseWorkflow() {
 
   const handleBack = () => {
     if (currentStep === 'review') {
-      setCurrentStep('contact');
-    } else if (currentStep === 'contact') {
       setCurrentStep('configuration');
     }
   };
@@ -360,7 +553,7 @@ export default function PurchaseWorkflow() {
   };
 
   const getStepProgress = () => {
-    const steps: Step[] = ['configuration', 'contact', 'review'];
+    const steps: Step[] = ['configuration', 'review'];
     const currentIndex = steps.indexOf(currentStep);
     return ((currentIndex + 1) / steps.length) * 100;
   };
@@ -411,9 +604,6 @@ export default function PurchaseWorkflow() {
             <div className="flex justify-between text-sm font-semibold">
               <span className={currentStep === 'configuration' ? 'text-blue-600' : 'text-gray-500'}>
                 Configuration
-              </span>
-              <span className={currentStep === 'contact' ? 'text-blue-600' : 'text-gray-500'}>
-                Contact Info
               </span>
               <span className={currentStep === 'review' ? 'text-blue-600' : 'text-gray-500'}>
                 Review & Submit
@@ -477,106 +667,436 @@ export default function PurchaseWorkflow() {
                   Configure Your RV
                 </h3>
                 <p className="text-gray-600 mb-6">
-                  Select your specific unit and optional upgrades
+                  Select your delivery method and specific unit
                 </p>
+              </div>
+
+              {/* Customer Information */}
+              <div className="mb-8 pb-8 border-b border-gray-200">
+                <h4 className="text-xl font-bold text-gray-800 mb-6">Customer Information</h4>
+                
+                {/* Name Row */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                  {/* First Name */}
+                  <div>
+                    <label htmlFor="firstName" className="block text-sm font-semibold text-gray-700 mb-2">
+                      First Name <span className="text-red-600">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      id="firstName"
+                      value={contactData.firstName}
+                      onChange={(e) => setContactData({ ...contactData, firstName: e.target.value })}
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-blue-600 text-gray-800"
+                      placeholder="First Name"
+                    />
+                  </div>
+
+                  {/* Last Name */}
+                  <div>
+                    <label htmlFor="lastName" className="block text-sm font-semibold text-gray-700 mb-2">
+                      Last Name <span className="text-red-600">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      id="lastName"
+                      value={contactData.lastName}
+                      onChange={(e) => setContactData({ ...contactData, lastName: e.target.value })}
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-blue-600 text-gray-800"
+                      placeholder="Last Name"
+                    />
+                  </div>
+                </div>
+
+                {/* Email */}
+                <div className="mb-4">
+                  <label htmlFor="email" className="block text-sm font-semibold text-gray-700 mb-2">
+                    Email Address <span className="text-red-600">*</span>
+                  </label>
+                  <input
+                    type="email"
+                    id="email"
+                    value={contactData.email}
+                    onChange={(e) => setContactData({ ...contactData, email: e.target.value })}
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-blue-600 text-gray-800"
+                    placeholder="your.email@example.com"
+                  />
+                </div>
+
+                {/* Phone */}
+                <div className="mb-4">
+                  <label htmlFor="phone" className="block text-sm font-semibold text-gray-700 mb-2">
+                    Phone Number <span className="text-red-600">*</span>
+                  </label>
+                  <PatternFormat
+                    id="phone"
+                    format="(###) ###-####"
+                    mask="_"
+                    value={contactData.phone}
+                    onValueChange={(values) => setContactData({ ...contactData, phone: values.formattedValue })}
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-blue-600 text-gray-800"
+                    placeholder="(555) 123-4567"
+                  />
+                </div>
+
+                {/* Address */}
+                <div className="mb-4">
+                  <label htmlFor="address" className="block text-sm font-semibold text-gray-700 mb-2">
+                    Street Address <span className="text-red-600">*</span>
+                  </label>
+                  <Autocomplete
+                    apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}
+                    onPlaceSelected={(place) => {
+                      const address = place.formatted_address || '';
+                      setContactData({ ...contactData, address });
+                      
+                      // Try to extract city, state, zip from place
+                      const components = place.address_components || [];
+                      components.forEach((component: any) => {
+                        if (component.types.includes('locality')) {
+                          setContactData(prev => ({ ...prev, city: component.long_name }));
+                        }
+                        if (component.types.includes('administrative_area_level_1')) {
+                          setContactData(prev => ({ ...prev, state: component.short_name }));
+                        }
+                        if (component.types.includes('postal_code')) {
+                          setContactData(prev => ({ ...prev, zipCode: component.long_name }));
+                        }
+                      });
+                    }}
+                    options={{
+                      types: ['address'],
+                      componentRestrictions: { country: 'us' },
+                    }}
+                    defaultValue={contactData.address}
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-blue-600 text-gray-800"
+                    placeholder="Start typing your address..."
+                  />
+                </div>
+
+                {/* City, State, Zip Code Row */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* City */}
+                  <div>
+                    <label htmlFor="city" className="block text-sm font-semibold text-gray-700 mb-2">
+                      City <span className="text-red-600">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      id="city"
+                      value={contactData.city}
+                      onChange={(e) => setContactData({ ...contactData, city: e.target.value })}
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-blue-600 text-gray-800"
+                      placeholder="City"
+                    />
+                  </div>
+
+                  {/* State */}
+                  <div>
+                    <label htmlFor="state" className="block text-sm font-semibold text-gray-700 mb-2">
+                      State <span className="text-red-600">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      id="state"
+                      value={contactData.state}
+                      onChange={(e) => setContactData({ ...contactData, state: e.target.value })}
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-blue-600 text-gray-800"
+                      placeholder="State"
+                      maxLength={2}
+                    />
+                  </div>
+
+                  {/* Zip Code */}
+                  <div>
+                    <label htmlFor="zipCode" className="block text-sm font-semibold text-gray-700 mb-2">
+                      Zip Code <span className="text-red-600">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      id="zipCode"
+                      value={contactData.zipCode}
+                      onChange={(e) => setContactData({ ...contactData, zipCode: e.target.value })}
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-blue-600 text-gray-800"
+                      placeholder="Zip Code"
+                      maxLength={5}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Delivery Method Toggle */}
+              <div className="mb-8">
+                <label className="block text-xl font-bold text-gray-800 mb-4">Delivery Method</label>
+                <div className="inline-flex rounded-lg border-2 border-gray-300 overflow-hidden">
+                  <button
+                    onClick={() => setConfigurationData({ ...configurationData, deliveryMethod: 'pickup' })}
+                    className={`px-8 py-3 font-semibold transition-colors ${
+                      configurationData.deliveryMethod === 'pickup'
+                        ? 'bg-slate-700 text-white'
+                        : 'bg-white text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    Pick Up
+                  </button>
+                  <button
+                    onClick={() => setConfigurationData({ ...configurationData, deliveryMethod: 'ship' })}
+                    className={`px-8 py-3 font-semibold transition-colors ${
+                      configurationData.deliveryMethod === 'ship'
+                        ? 'bg-slate-700 text-white'
+                        : 'bg-white text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    Ship To
+                  </button>
+                </div>
+              </div>
+
+                {/* Shipping Address Checkbox - Only show if Ship To is selected */}
+                {configurationData.deliveryMethod === 'ship' && (
+                  <div className="mb-8">
+                    <div className="flex items-start mb-4">
+                      <input
+                        type="checkbox"
+                        id="sameAsCustomer"
+                        checked={configurationData.shippingAddressSameAsCustomer}
+                        onChange={(e) => {
+                          const isChecked = e.target.checked;
+                          setConfigurationData({ 
+                            ...configurationData, 
+                            shippingAddressSameAsCustomer: isChecked,
+                            // If checked, copy customer address to shipping address
+                            ...(isChecked ? {
+                              shippingAddress: contactData.address,
+                              shippingCity: contactData.city,
+                              shippingState: contactData.state,
+                              shippingZipCode: contactData.zipCode,
+                            } : {})
+                          });
+                        }}
+                        className="mt-1 h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <label htmlFor="sameAsCustomer" className="ml-3 text-sm font-medium text-gray-700">
+                        Shipping address is the same as my customer address
+                      </label>
+                    </div>
+
+                    {/* Conditional Shipping Address Form - Only show if checkbox is unchecked */}
+                    {!configurationData.shippingAddressSameAsCustomer && (
+                      <div className="space-y-4 pl-0">
+                        <div>
+                          <label className="block text-xl font-bold text-gray-800 mb-4">
+                            Shipping Address <span className="text-red-600">*</span>
+                          </label>
+                          <p className="text-sm text-gray-600 mb-3">
+                            Enter the address where you'd like the RV delivered
+                          </p>
+                        </div>
+
+                        {/* Street Address with Google Autocomplete */}
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">
+                            Street Address <span className="text-red-600">*</span>
+                          </label>
+                          <Autocomplete
+                            apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}
+                            onPlaceSelected={(place) => {
+                              const address = place.formatted_address || '';
+                              setConfigurationData(prev => ({ ...prev, shippingAddress: address }));
+                              
+                              // Extract city, state, zip from place
+                              const components = place.address_components || [];
+                              components.forEach((component: any) => {
+                                if (component.types.includes('locality')) {
+                                  setConfigurationData(prev => ({ ...prev, shippingCity: component.long_name }));
+                                }
+                                if (component.types.includes('administrative_area_level_1')) {
+                                  setConfigurationData(prev => ({ ...prev, shippingState: component.short_name }));
+                                }
+                                if (component.types.includes('postal_code')) {
+                                  setConfigurationData(prev => ({ ...prev, shippingZipCode: component.long_name }));
+                                }
+                              });
+                            }}
+                            options={{
+                              types: ['address'],
+                              componentRestrictions: { country: 'us' },
+                            }}
+                            defaultValue={configurationData.shippingAddress || ''}
+                            className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-blue-600 text-gray-800"
+                            placeholder="Start typing your address..."
+                          />
+                        </div>
+
+                        {/* City, State, Zip Row */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          {/* City */}
+                          <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                              City <span className="text-red-600">*</span>
+                            </label>
+                            <input
+                              type="text"
+                              value={configurationData.shippingCity || ''}
+                              onChange={(e) => setConfigurationData({ ...configurationData, shippingCity: e.target.value })}
+                              className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-blue-600 text-gray-800"
+                              placeholder="City"
+                            />
+                          </div>
+
+                          {/* State */}
+                          <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                              State <span className="text-red-600">*</span>
+                            </label>
+                            <input
+                              type="text"
+                              value={configurationData.shippingState || ''}
+                              onChange={(e) => setConfigurationData({ ...configurationData, shippingState: e.target.value })}
+                              className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-blue-600 text-gray-800"
+                              placeholder="State"
+                              maxLength={2}
+                            />
+                          </div>
+
+                          {/* Zip Code */}
+                          <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                              Zip Code <span className="text-red-600">*</span>
+                            </label>
+                            <input
+                              type="text"
+                              value={configurationData.shippingZipCode || ''}
+                              onChange={(e) => setConfigurationData({ ...configurationData, shippingZipCode: e.target.value })}
+                              className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-blue-600 text-gray-800"
+                              placeholder="Zip Code"
+                              maxLength={5}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Unit Selection - Only show if multiple units available */}
                 {availableUnits.length > 1 && (
                   <div className="mb-8">
-                    <label className="block text-xl font-bold text-gray-800 mb-4">
-                      Select Specific Unit <span className="text-red-600">*</span>
-                    </label>
-                    <p className="text-sm text-gray-600 mb-4">
-                      We have {availableUnits.length} units of this model available. Please select your preferred unit:
-                    </p>
-                    <div className="space-y-3">
-                      {availableUnits.map((unit) => (
-                        <button
-                          key={unit.stock}
-                          onClick={() => handleStockSelection(unit.stock)}
-                          className={`w-full text-left p-4 border-2 rounded-lg transition-all ${
-                            configurationData.selectedStock === unit.stock
-                              ? 'border-blue-600 bg-blue-50'
-                              : 'border-gray-300 hover:border-gray-400'
-                          }`}
+                    <div className="flex justify-between items-start mb-4">
+                      <div>
+                        <label className="block text-xl font-bold text-gray-800 mb-2">
+                          Select Specific Unit <span className="text-red-600">*</span>
+                        </label>
+                        <p className="text-sm text-gray-600">
+                          We have {availableUnits.length} units of this model available. Please select your preferred unit:
+                        </p>
+                      </div>
+                      
+                      {/* Sort By Dropdown */}
+                      <div className="flex items-center gap-2">
+                        <label className="text-sm font-medium text-gray-700">Sort by:</label>
+                        <select
+                          value={sortBy}
+                          onChange={(e) => setSortBy(e.target.value as 'distance' | 'price')}
+                          className="px-3 py-2 border-2 border-gray-300 rounded-lg text-sm font-medium focus:outline-none focus:border-blue-600"
                         >
-                          <div className="flex justify-between items-center">
-                            <div>
-                              <p className="font-semibold text-gray-900">Stock #{unit.stock}</p>
-                              <p className="text-sm text-gray-600">{unit.location || 'Location TBD'}</p>
-                            </div>
-                            <div className="text-right">
-                              <p className="font-semibold text-blue-600">{formatCurrency(calculateDiscountedPrice(unit.price))}</p>
-                              <p className="text-xs text-gray-500">MSRP: {formatCurrency(unit.price)}</p>
-                            </div>
-                          </div>
-                        </button>
-                      ))}
+                          {configurationData.deliveryMethod === 'pickup' && unitDistances.size > 0 && (
+                            <option value="distance">Distance</option>
+                          )}
+                          <option value="price">Price</option>
+                        </select>
+                      </div>
                     </div>
-                  </div>
-                )}
-
-                {/* Delivery Method Toggle */}
-                <div className="mb-8">
-                  <label className="block text-xl font-bold text-gray-800 mb-4">Delivery Method</label>
-                  <div className="inline-flex rounded-lg border-2 border-gray-300 overflow-hidden">
-                    <button
-                      onClick={() => setConfigurationData({ ...configurationData, deliveryMethod: 'pickup' })}
-                      className={`px-8 py-3 font-semibold transition-colors ${
-                        configurationData.deliveryMethod === 'pickup'
-                          ? 'bg-slate-700 text-white'
-                          : 'bg-white text-gray-700 hover:bg-gray-50'
-                      }`}
-                    >
-                      Pick Up
-                    </button>
-                    <button
-                      onClick={() => setConfigurationData({ ...configurationData, deliveryMethod: 'ship' })}
-                      className={`px-8 py-3 font-semibold transition-colors ${
-                        configurationData.deliveryMethod === 'ship'
-                          ? 'bg-slate-700 text-white'
-                          : 'bg-white text-gray-700 hover:bg-gray-50'
-                      }`}
-                    >
-                      Ship To
-                    </button>
-                  </div>
-                </div>
-
-                {/* Zip Code Input - Only show if Ship To is selected */}
-                {configurationData.deliveryMethod === 'ship' && (
-                  <div className="mb-8">
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      Shipping ZIP Code <span className="text-red-600">*</span>
-                    </label>
-                    <p className="text-xs text-gray-600 mb-3">
-                      Enter your ZIP code so we can properly calculate shipping costs
-                    </p>
-                    <div className="flex items-center gap-3">
-                      <input
-                        type="text"
-                        placeholder="Enter ZIP Code"
-                        value={userZip}
-                        onChange={(e) => {
-                          const zip = e.target.value.replace(/\D/g, '').slice(0, 5);
-                          setUserZip(zip);
-                          // Save to localStorage when changed
-                          if (zip.length === 5) {
-                            localStorage.setItem('userZip', zip);
-                          }
-                        }}
-                        className="w-40 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:border-blue-600 focus:ring-1 focus:ring-blue-200 focus:outline-none"
-                        maxLength={5}
-                        required
-                      />
-                      {userZip.length === 5 && (
-                        <span className="text-sm text-green-600 flex items-center gap-1">
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                          </svg>
-                          Valid
-                        </span>
-                      )}
+                    
+                    <div className="space-y-3">
+                      {sortedUnits.map((unit) => {
+                        const discountedPrice = calculateDiscountedPrice(unit.price);
+                        const monthlyPayment = calculateMonthlyPayment(discountedPrice);
+                        const distance = unitDistances.get(unit.stock);
+                        const showDistance = distance !== undefined;
+                        const isShipTo = configurationData.deliveryMethod === 'ship';
+                        
+                        // Calculate shipping costs if ship-to is selected and distance is available
+                        const shippingCost = isShipTo && distance ? calculateShippingCost(distance) : 0;
+                        const shippingMonthly = shippingCost > 0 ? calculateShippingMonthlyPayment(shippingCost) : 0;
+                        
+                        // Calculate grand total if shipping
+                        const grandTotal = isShipTo && shippingCost > 0 ? discountedPrice + shippingCost : discountedPrice;
+                        const grandTotalMonthly = calculateMonthlyPayment(grandTotal);
+                        
+                        return (
+                          <button
+                            key={unit.stock}
+                            onClick={() => handleStockSelection(unit.stock)}
+                            className={`w-full text-left p-4 border-2 rounded-lg transition-all ${
+                              configurationData.selectedStock === unit.stock
+                                ? 'border-blue-600 bg-blue-50'
+                                : 'border-gray-300 hover:border-gray-400'
+                            }`}
+                          >
+                            <div className="flex justify-between items-start">
+                              <div className="flex-1">
+                                <p className="font-semibold text-gray-900">Stock #{unit.stock}</p>
+                                <p className="text-sm text-gray-600">{getFullLocationName(unit)}</p>
+                                
+                                {/* Show distance for both pickup and ship-to */}
+                                {showDistance && (
+                                  <p className="text-sm text-blue-600 font-medium mt-1">
+                                    📍 {distance.toFixed(0)} miles away
+                                  </p>
+                                )}
+                                
+                                {isCalculatingDistances && !distance && (
+                                  <p className="text-xs text-gray-500 mt-1">Calculating distance...</p>
+                                )}
+                              </div>
+                              
+                              {/* Pricing Section */}
+                              <div className="ml-4 min-w-[320px]">
+                                {/* Top row - Shipping (if ship-to) + RV Price */}
+                                <div className="flex items-start justify-center gap-6 mb-2">
+                                  {/* Shipping Cost - LEFT (only show for ship-to) */}
+                                  {isShipTo && shippingCost > 0 && (
+                                    <>
+                                      <div className="text-center">
+                                        <p className="text-xs text-gray-500 mb-1">Shipping</p>
+                                        <p className="font-semibold text-blue-600 text-lg">{formatCurrency(shippingCost)}</p>
+                                        <p className="text-xs text-gray-600 mt-1">or {formatCurrency(shippingMonthly)}/mo</p>
+                                      </div>
+                                      
+                                      {/* Plus Sign - Centered */}
+                                      <div className="text-2xl font-bold text-gray-600 flex items-center">+</div>
+                                    </>
+                                  )}
+                                  
+                                  {/* RV Price - RIGHT (always in same position) */}
+                                  <div className="text-center">
+                                    <p className="text-xs text-gray-500 mb-1">RV Price</p>
+                                    <p className="font-semibold text-blue-600 text-lg">{formatCurrency(discountedPrice)}</p>
+                                    <p className="text-xs text-gray-600 mt-1">or {formatCurrency(monthlyPayment)}/mo</p>
+                                    <p className="text-xs text-gray-500 mt-1">MSRP: {formatCurrency(unit.price)}</p>
+                                  </div>
+                                </div>
+                                
+                                {/* Grand Total - Only show for ship-to */}
+                                {isShipTo && shippingCost > 0 && (
+                                  <>
+                                    {/* Equals Line */}
+                                    <div className="border-t-2 border-gray-400 my-2"></div>
+                                    
+                                    {/* Grand Total - BELOW */}
+                                    <div className="text-center">
+                                      <p className="text-xs text-gray-700 font-semibold mb-1">Grand Total</p>
+                                      <p className="font-bold text-green-600 text-xl">{formatCurrency(grandTotal)}</p>
+                                      <p className="text-xs text-gray-600 mt-1">or {formatCurrency(grandTotalMonthly)}/mo</p>
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -606,27 +1126,32 @@ export default function PurchaseWorkflow() {
                       Finance
                     </button>
                   </div>
-                  {configurationData.paymentMethod === 'finance' && (
+                  {configurationData.paymentMethod === 'finance' && selectedRV && (
                     <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
                       <p className="text-sm text-blue-900 mb-2">
                         <strong>Kiewit Financing Benefits:</strong>
                       </p>
                       <ul className="text-sm text-blue-800 space-y-1">
-                        <li>• 0% APR for 120 months (10 years)</li>
+                        <li>• 5.25% APR for 120 months (10 years)</li>
                         <li>• 20% down payment required</li>
-                        <li>• Estimated monthly payment: <strong>{formatCurrency((calculateTotalPrice() * 0.80) / 120)}/mo</strong></li>
+                        <li>• Estimated monthly payment: <strong>{formatCurrency((() => {
+                          const discountedPrice = calculateDiscountedPrice(selectedRV.price);
+                          const distance = unitDistances.get(selectedRV.stock);
+                          const shippingCost = configurationData.deliveryMethod === 'ship' && distance ? calculateShippingCost(distance) : 0;
+                          const grandTotal = discountedPrice + shippingCost;
+                          return calculateMonthlyPayment(grandTotal);
+                        })())}/mo</strong></li>
                       </ul>
                     </div>
                   )}
                 </div>
-              </div>
 
-              <div className="flex justify-end pt-6 border-t border-gray-200">
+                <div className="flex justify-end pt-6 border-t border-gray-200">
                 <button
                   onClick={handleNext}
                   className="px-8 py-3 bg-[#B43732] text-white font-semibold rounded-lg hover:bg-[#9A2F2B] transition-colors"
                 >
-                  Next: Contact Info →
+                  Next: Review →
                 </button>
               </div>
             </div>
@@ -846,9 +1371,18 @@ export default function PurchaseWorkflow() {
                     <span className="font-medium text-gray-900 capitalize">{configurationData.deliveryMethod === 'pickup' ? 'Pick Up' : 'Ship To'}</span>
                   </div>
                   {configurationData.deliveryMethod === 'ship' && (
-                    <div className="flex justify-between">
-                      <span className="text-gray-700">Shipping ZIP:</span>
-                      <span className="font-medium text-gray-900">{userZip}</span>
+                    <div className="mt-2">
+                      <p className="text-sm text-gray-500 mb-1">Shipping Address:</p>
+                      {configurationData.shippingAddressSameAsCustomer ? (
+                        <p className="text-gray-800 font-medium italic">(Same as customer address)</p>
+                      ) : (
+                        <>
+                          <p className="text-gray-800 font-medium">{configurationData.shippingAddress}</p>
+                          <p className="text-gray-800 font-medium">
+                            {configurationData.shippingCity}, {configurationData.shippingState} {configurationData.shippingZipCode}
+                          </p>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>
