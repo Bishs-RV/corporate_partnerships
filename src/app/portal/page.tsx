@@ -103,11 +103,11 @@ export default function PortalPage() {
       if (selectedTypes.length > 0 && !selectedTypes.includes(rv.type)) return false;
       // Filter by price
       if (minPrice > 0 && rv.price < minPrice) return false;
-      if (maxPrice < 200000 && rv.price > maxPrice) return false;
+      if (maxPrice < 100000 && rv.price > maxPrice) return false; // Only filter if not at max
       // Filter by monthly payment
       const monthlyPayment = calculateMonthlyPayment(rv.price);
       if (minMonthlyPayment > 0 && monthlyPayment < minMonthlyPayment) return false;
-      if (maxMonthlyPayment < maxMonthlyPaymentLimit && monthlyPayment > maxMonthlyPayment) return false;
+      if (maxMonthlyPayment < maxMonthlyPaymentLimit && monthlyPayment > maxMonthlyPayment) return false; // Only filter if not at max
       // Filter by sleeps
       if (minSleeps > 0 && rv.sleeps < minSleeps) return false;
       // Filter by distance (if user has calculated distances)
@@ -778,7 +778,7 @@ export default function PortalPage() {
                     <div className="px-1">
                       <div className="flex mb-2 items-center justify-between text-xs text-gray-600">
                         <span>${minPrice.toLocaleString()}</span>
-                        <span>${maxPrice.toLocaleString()}</span>
+                        <span>${maxPrice.toLocaleString()}{maxPrice >= 100000 ? '+' : ''}</span>
                       </div>
                       <Slider
                         range
@@ -857,16 +857,19 @@ export default function PortalPage() {
                               setPriceMax(value);
                               if (value) {
                                 const numValue = Number(value);
-                                if (numValue >= minPrice && numValue <= 200000) {
+                                if (numValue >= minPrice && numValue <= 100000) {
                                   setMaxPrice(numValue);
                                 }
                               } else {
-                                setMaxPrice(200000);
+                                setMaxPrice(100000);
                               }
                             }}
-                            placeholder="200000"
+                            placeholder="100000"
                             className="w-full pl-5 pr-2 py-1.5 text-xs border border-gray-300 rounded-lg focus:border-slate-600 focus:ring-1 focus:ring-slate-200 focus:outline-none"
                           />
+                          {maxPrice >= 100000 && (
+                            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 text-xs">+</span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -883,7 +886,7 @@ export default function PortalPage() {
                     <div className="px-1">
                       <div className="flex mb-2 items-center justify-between text-xs text-gray-600">
                         <span>${minMonthlyPayment.toLocaleString()}/mo</span>
-                        <span>${maxMonthlyPayment.toLocaleString()}/mo</span>
+                        <span>${maxMonthlyPayment.toLocaleString()}{maxMonthlyPayment >= maxMonthlyPaymentLimit ? '+' : ''}/mo</span>
                       </div>
                       <Slider
                         range
@@ -970,8 +973,11 @@ export default function PortalPage() {
                               }
                             }}
                             placeholder={maxMonthlyPaymentLimit.toString()}
-                            className="w-full pl-5 pr-2 py-1.5 text-xs border border-gray-300 rounded-lg focus:border-slate-600 focus:ring-1 focus:ring-slate-200 focus:outline-none"
+                            className="w-full pl-5 pr-8 py-1.5 text-xs border border-gray-300 rounded-lg focus:border-slate-600 focus:ring-1 focus:ring-slate-200 focus:outline-none"
                           />
+                          {maxMonthlyPayment >= maxMonthlyPaymentLimit && (
+                            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 text-xs">+</span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1010,6 +1016,37 @@ export default function PortalPage() {
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
                     Distance from Me
                   </label>
+                  
+                  {/* ZIP Code Input for Distance Calculation */}
+                  <div className="mb-3 p-2 bg-gray-50 rounded-lg border border-gray-200">
+                    <p className="text-xs text-gray-600 mb-1.5">Enter ZIP to calculate</p>
+                    <div className="space-y-1.5">
+                      <input
+                        type="text"
+                        placeholder="ZIP Code"
+                        value={userZip}
+                        onChange={(e) => {
+                          const zip = e.target.value.replace(/\D/g, '').slice(0, 5);
+                          handleZipChange(zip);
+                        }}
+                        onKeyPress={(e) => {
+                          if (e.key === 'Enter' && userZip.length === 5) {
+                            handleCalculateDistance();
+                          }
+                        }}
+                        className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded focus:border-slate-600 focus:ring-1 focus:ring-slate-200 focus:outline-none"
+                        maxLength={5}
+                      />
+                      <button
+                        onClick={handleCalculateDistance}
+                        disabled={userZip.length !== 5 || isGeocodingZip}
+                        className="w-full px-2.5 py-1.5 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                      >
+                        {isGeocodingZip ? 'Calculating...' : 'Calculate Distances'}
+                      </button>
+                    </div>
+                  </div>
+
                   <div className="relative">
                     <select
                       value={maxDistance}
@@ -1031,7 +1068,7 @@ export default function PortalPage() {
                     </div>
                   </div>
                   {locationDistances.size === 0 && (
-                    <p className="mt-1 text-xs text-gray-500">Enter a ZIP code above to enable distance filtering</p>
+                    <p className="mt-1 text-xs text-gray-500">Calculate distances above to enable filtering</p>
                   )}
                 </div>
               </div>
@@ -1405,7 +1442,7 @@ export default function PortalPage() {
                       <div className="px-1">
                         <div className="flex mb-2 items-center justify-between text-xs text-gray-600">
                           <span>${minPrice.toLocaleString()}</span>
-                          <span>${maxPrice.toLocaleString()}</span>
+                          <span>${maxPrice.toLocaleString()}{maxPrice >= 100000 ? '+' : ''}</span>
                         </div>
                         <Slider
                           range
@@ -1484,16 +1521,19 @@ export default function PortalPage() {
                                 setPriceMax(value);
                                 if (value) {
                                   const numValue = Number(value);
-                                  if (numValue >= minPrice && numValue <= 200000) {
+                                  if (numValue >= minPrice && numValue <= 100000) {
                                     setMaxPrice(numValue);
                                   }
                                 } else {
-                                  setMaxPrice(200000);
+                                  setMaxPrice(100000);
                                 }
                               }}
-                              placeholder="200000"
+                              placeholder="100000"
                               className="w-full pl-5 pr-2 py-1.5 text-xs border border-gray-300 rounded-lg focus:border-slate-600 focus:ring-1 focus:ring-slate-200 focus:outline-none"
                             />
+                            {maxPrice >= 100000 && (
+                              <span className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 text-xs">+</span>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -1510,7 +1550,7 @@ export default function PortalPage() {
                       <div className="px-1">
                         <div className="flex mb-2 items-center justify-between text-xs text-gray-600">
                           <span>${minMonthlyPayment.toLocaleString()}/mo</span>
-                          <span>${maxMonthlyPayment.toLocaleString()}/mo</span>
+                          <span>${maxMonthlyPayment.toLocaleString()}{maxMonthlyPayment >= maxMonthlyPaymentLimit ? '+' : ''}/mo</span>
                         </div>
                         <Slider
                           range
@@ -1597,8 +1637,11 @@ export default function PortalPage() {
                                 }
                               }}
                               placeholder={maxMonthlyPaymentLimit.toString()}
-                              className="w-full pl-5 pr-2 py-1.5 text-xs border border-gray-300 rounded-lg focus:border-slate-600 focus:ring-1 focus:ring-slate-200 focus:outline-none"
+                              className="w-full pl-5 pr-8 py-1.5 text-xs border border-gray-300 rounded-lg focus:border-slate-600 focus:ring-1 focus:ring-slate-200 focus:outline-none"
                             />
+                            {maxMonthlyPayment >= maxMonthlyPaymentLimit && (
+                              <span className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 text-xs">+</span>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -1637,6 +1680,37 @@ export default function PortalPage() {
                     <label className="block text-sm font-semibold text-gray-700 mb-2">
                       Distance from Me
                     </label>
+                    
+                    {/* ZIP Code Input for Distance Calculation */}
+                    <div className="mb-3 p-2 bg-gray-50 rounded-lg border border-gray-200">
+                      <p className="text-xs text-gray-600 mb-1.5">Enter ZIP to calculate</p>
+                      <div className="space-y-1.5">
+                        <input
+                          type="text"
+                          placeholder="ZIP Code"
+                          value={userZip}
+                          onChange={(e) => {
+                            const zip = e.target.value.replace(/\D/g, '').slice(0, 5);
+                            handleZipChange(zip);
+                          }}
+                          onKeyPress={(e) => {
+                            if (e.key === 'Enter' && userZip.length === 5) {
+                              handleCalculateDistance();
+                            }
+                          }}
+                          className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded focus:border-slate-600 focus:ring-1 focus:ring-slate-200 focus:outline-none"
+                          maxLength={5}
+                        />
+                        <button
+                          onClick={handleCalculateDistance}
+                          disabled={userZip.length !== 5 || isGeocodingZip}
+                          className="w-full px-2.5 py-1.5 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                        >
+                          {isGeocodingZip ? 'Calculating...' : 'Calculate Distances'}
+                        </button>
+                      </div>
+                    </div>
+
                     <div className="relative">
                       <select
                         value={maxDistance}
@@ -1658,7 +1732,7 @@ export default function PortalPage() {
                       </div>
                     </div>
                     {locationDistances.size === 0 && (
-                      <p className="mt-1 text-xs text-gray-500">Enter a ZIP code above to enable distance filtering</p>
+                      <p className="mt-1 text-xs text-gray-500">Calculate distances above to enable filtering</p>
                     )}
                   </div>
 

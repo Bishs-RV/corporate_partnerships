@@ -1229,6 +1229,136 @@ export default function PurchaseWorkflow() {
                   </div>
                 )}
 
+                {/* Accessories Selection */}
+                <div className="mb-8 pb-8 pt-8 border-t border-gray-200 border-b">
+                  <label className="block text-xl font-bold text-gray-800 mb-4">Optional Accessories</label>
+                  <p className="text-gray-600 mb-6">Add accessories to enhance your RV experience</p>
+
+                  {/* Power Package */}
+                  <div className="mb-6">
+                    <label className="block text-lg font-semibold text-gray-700 mb-3">Power Package</label>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <button
+                        onClick={() => setConfigurationData({ ...configurationData, powerPackage: undefined })}
+                        className={`p-4 border-2 rounded-lg transition-all text-left ${
+                          !configurationData.powerPackage
+                            ? 'border-blue-600 bg-blue-50'
+                            : 'border-gray-300 hover:border-gray-400'
+                        }`}
+                      >
+                        <div className="font-semibold text-gray-900">None</div>
+                        <div className="text-sm text-gray-600">Standard Configuration</div>
+                      </button>
+                      
+                      <button
+                        onClick={() => setConfigurationData({ ...configurationData, powerPackage: 'standard' })}
+                        className={`p-4 border-2 rounded-lg transition-all text-left ${
+                          configurationData.powerPackage === 'standard'
+                            ? 'border-blue-600 bg-blue-50'
+                            : 'border-gray-300 hover:border-gray-400'
+                        }`}
+                      >
+                        <div className="font-semibold text-gray-900">🔋 Standard Power</div>
+                        <div className="text-sm text-gray-600 mb-1">Two 6V batteries</div>
+                        <div className="text-blue-600 font-semibold">+{formatCurrency(419)}</div>
+                        <div className="text-xs text-gray-500">or +{formatCurrency(Math.round(419 / 120))}/mo</div>
+                      </button>
+                      
+                      <button
+                        onClick={() => setConfigurationData({ ...configurationData, powerPackage: '6volt' })}
+                        className={`p-4 border-2 rounded-lg transition-all text-left ${
+                          configurationData.powerPackage === '6volt'
+                            ? 'border-blue-600 bg-blue-50'
+                            : 'border-gray-300 hover:border-gray-400'
+                        }`}
+                      >
+                        <div className="font-semibold text-gray-900">🔋🔋 Upgraded 6V</div>
+                        <div className="text-sm text-gray-600 mb-1">Four 6V batteries</div>
+                        <div className="text-blue-600 font-semibold">+{formatCurrency(555)}</div>
+                        <div className="text-xs text-gray-500">or +{formatCurrency(Math.round(555 / 120))}/mo</div>
+                      </button>
+                      
+                      <button
+                        onClick={() => setConfigurationData({ ...configurationData, powerPackage: 'lithium' })}
+                        className={`p-4 border-2 rounded-lg transition-all text-left ${
+                          configurationData.powerPackage === 'lithium'
+                            ? 'border-blue-600 bg-blue-50'
+                            : 'border-gray-300 hover:border-gray-400'
+                        }`}
+                      >
+                        <div className="font-semibold text-gray-900">⚡ Lithium Package</div>
+                        <div className="text-sm text-gray-600 mb-1">Premium lithium batteries</div>
+                        <div className="text-blue-600 font-semibold">+{formatCurrency(1299)}</div>
+                        <div className="text-xs text-gray-500">or +{formatCurrency(Math.round(1299 / 120))}/mo</div>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Hitch Package */}
+                  <div className="mb-6">
+                    <label className="block text-lg font-semibold text-gray-700 mb-3">Hitch Package</label>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <button
+                        onClick={() => setConfigurationData({ ...configurationData, hitchPackage: undefined })}
+                        className={`p-4 border-2 rounded-lg transition-all text-left ${
+                          !configurationData.hitchPackage
+                            ? 'border-blue-600 bg-blue-50'
+                            : 'border-gray-300 hover:border-gray-400'
+                        }`}
+                      >
+                        <div className="font-semibold text-gray-900">None</div>
+                        <div className="text-sm text-gray-600">Standard Hitch</div>
+                      </button>
+                      
+                      <button
+                        onClick={() => setConfigurationData({ ...configurationData, hitchPackage: 'anti-sway' })}
+                        className={`p-4 border-2 rounded-lg transition-all text-left ${
+                          configurationData.hitchPackage === 'anti-sway'
+                            ? 'border-blue-600 bg-blue-50'
+                            : 'border-gray-300 hover:border-gray-400'
+                        }`}
+                      >
+                        <div className="font-semibold text-gray-900">🔗 Anti-Sway Hitch</div>
+                        <div className="text-sm text-gray-600 mb-1">Enhanced stability and control</div>
+                        <div className="text-blue-600 font-semibold">+{formatCurrency(600)}</div>
+                        <div className="text-xs text-gray-500">or +{formatCurrency(Math.round(600 / 120))}/mo</div>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Brake Control */}
+                  <div className="mb-6">
+                    <label className="block text-lg font-semibold text-gray-700 mb-3">Brake Controller</label>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <button
+                        onClick={() => setConfigurationData({ ...configurationData, brakeControl: undefined })}
+                        className={`p-4 border-2 rounded-lg transition-all text-left ${
+                          !configurationData.brakeControl
+                            ? 'border-blue-600 bg-blue-50'
+                            : 'border-gray-300 hover:border-gray-400'
+                        }`}
+                      >
+                        <div className="font-semibold text-gray-900">None</div>
+                        <div className="text-sm text-gray-600">No brake controller</div>
+                      </button>
+                      
+                      <button
+                        onClick={() => setConfigurationData({ ...configurationData, brakeControl: 'wireless' })}
+                        className={`p-4 border-2 rounded-lg transition-all text-left ${
+                          configurationData.brakeControl === 'wireless'
+                            ? 'border-blue-600 bg-blue-50'
+                            : 'border-gray-300 hover:border-gray-400'
+                        }`}
+                      >
+                        <div className="font-semibold text-gray-900">🛑 Wireless Brake Controller</div>
+                        <div className="text-sm text-gray-600 mb-1">Easy installation, remote control</div>
+                        <div className="text-blue-600 font-semibold">+{formatCurrency(299)}</div>
+                        <div className="text-xs text-gray-500">or +{formatCurrency(Math.round(299 / 120))}/mo</div>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Cash vs Finance Toggle */}
                 <div className="mb-8">
                   <label className="block text-xl font-bold text-gray-800 mb-4">Payment Method</label>
@@ -1275,7 +1405,7 @@ export default function PurchaseWorkflow() {
                 </div>
 
                 {/* Ownership Protection Section */}
-                <div className="mb-8">
+                <div className="mb-8 pt-8 border-t border-gray-200">
                   <label className="block text-xl font-bold text-gray-800 mb-4">Ownership Protection</label>
                   <p className="text-gray-600 mb-4">Protect your investment with these optional coverage plans</p>
                   
@@ -2113,6 +2243,41 @@ export default function PurchaseWorkflow() {
                     <div className="flex justify-between px-6 py-3">
                       <div className="text-gray-700 text-sm">SHIPPING ({unitDistances.get(selectedRV.stock)} mi × $2.50)</div>
                       <div className="text-gray-700">{formatCurrency(calculateShippingCost(unitDistances.get(selectedRV.stock)!))}</div>
+                    </div>
+                  )}
+
+                  {/* Accessories */}
+                  {(configurationData.powerPackage || configurationData.hitchPackage || configurationData.brakeControl) && (
+                    <div className="flex justify-between px-6 py-3">
+                      <div>
+                        <div className="text-gray-700 text-sm">ACCESSORIES</div>
+                        <div className="ml-4 mt-1 space-y-0.5 text-xs text-gray-600">
+                          {configurationData.powerPackage === 'standard' && (
+                            <div>• Standard Power Package</div>
+                          )}
+                          {configurationData.powerPackage === '6volt' && (
+                            <div>• Upgraded 6V Package</div>
+                          )}
+                          {configurationData.powerPackage === 'lithium' && (
+                            <div>• Lithium Package</div>
+                          )}
+                          {configurationData.hitchPackage === 'anti-sway' && (
+                            <div>• Anti-Sway Hitch</div>
+                          )}
+                          {configurationData.brakeControl === 'wireless' && (
+                            <div>• Wireless Brake Controller</div>
+                          )}
+                        </div>
+                      </div>
+                      <div className="text-gray-700">
+                        {formatCurrency(
+                          (configurationData.powerPackage === 'standard' ? 419 : 0) +
+                          (configurationData.powerPackage === '6volt' ? 555 : 0) +
+                          (configurationData.powerPackage === 'lithium' ? 1299 : 0) +
+                          (configurationData.hitchPackage === 'anti-sway' ? 600 : 0) +
+                          (configurationData.brakeControl === 'wireless' ? 299 : 0)
+                        )}
+                      </div>
                     </div>
                   )}
 
