@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from 'react';
 import Script from 'next/script';
 
+/// <reference types="@types/google.maps" />
+
 interface Location {
   cmf: number;
   location: string;
