@@ -8,6 +8,7 @@ import { getPrimaryImage } from '@/lib/rvImages';
 import Autocomplete from 'react-google-autocomplete';
 import { PatternFormat } from 'react-number-format';
 import { calculateDrivingDistances, LocationWithCoordinates } from '@/lib/distance';
+import Script from 'next/script';
 
 type Step = 'configuration' | 'contact' | 'review';
 
@@ -691,9 +692,14 @@ export default function PurchaseWorkflow() {
   const discountedPrice = calculateDiscountedPrice(selectedRV.price);
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-md border-b border-gray-200">
+    <>
+      <Script
+        src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places`}
+        strategy="beforeInteractive"
+      />
+      <div className="min-h-screen bg-gray-50">
+        {/* Header */}
+        <header className="bg-white shadow-md border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex justify-between items-center">
             <div className="flex items-center gap-4">
@@ -2284,6 +2290,7 @@ export default function PurchaseWorkflow() {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }
