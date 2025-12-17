@@ -82,9 +82,10 @@ export default function PurchaseWorkflow() {
   const [userZip, setUserZip] = useState<string>('');
   const [protectionOptOut, setProtectionOptOut] = useState(false);
   const [expandedProtection, setExpandedProtection] = useState<string | null>(null);
+  const [isGoogleMapsLoaded, setIsGoogleMapsLoaded] = useState(false);
 
   const [configurationData, setConfigurationData] = useState<ConfigurationData>({
-    paymentMethod: 'cash',
+    paymentMethod: 'finance',
     deliveryMethod: 'pickup',
     shippingAddressSameAsCustomer: true,
     ownershipProtection: {
@@ -201,6 +202,41 @@ export default function PurchaseWorkflow() {
 
     fetchModelUnits();
   }, [modelSlug, router]);
+
+  // Check if Google Maps API is loaded
+  useEffect(() => {
+    const checkGoogleMapsLoaded = () => {
+      if (typeof window !== 'undefined' && window.google && window.google.maps && window.google.maps.places) {
+        setIsGoogleMapsLoaded(true);
+        return true;
+      }
+      return false;
+    };
+
+    // Check immediately
+    if (checkGoogleMapsLoaded()) {
+      return;
+    }
+
+    // Poll for the API to be loaded
+    const interval = setInterval(() => {
+      if (checkGoogleMapsLoaded()) {
+        clearInterval(interval);
+      }
+    }, 100);
+
+    // Also check on window load in case it's still loading
+    if (typeof window !== 'undefined') {
+      window.addEventListener('load', checkGoogleMapsLoaded);
+    }
+
+    return () => {
+      clearInterval(interval);
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('load', checkGoogleMapsLoaded);
+      }
+    };
+  }, []);
 
   // Calculate distances when customer enters address for either pickup or ship-to
   useEffect(() => {
@@ -330,6 +366,7 @@ export default function PurchaseWorkflow() {
     if (configurationData.powerPackage === '6volt') total += 555;
     if (configurationData.powerPackage === 'lithium') total += 1299;
     if (configurationData.hitchPackage === 'anti-sway') total += 600;
+    if (configurationData.hitchPackage === 'fifth-wheel') total += 1200;
     if (configurationData.brakeControl === 'wireless') total += 299;
     
     // Add shipping cost
@@ -341,8 +378,7 @@ export default function PurchaseWorkflow() {
     const protectionCost = calculateOwnershipProtectionTotal();
     total += protectionCost;
     
-    // Add sales prep cost
-    total += calculateSalesPrepCost(calculateDiscountedPrice(selectedRV.price));
+    // Sales prep cost is now included (not added to total)
     
     return total;
   };
@@ -696,6 +732,7 @@ export default function PurchaseWorkflow() {
       <Script
         src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places`}
         strategy="beforeInteractive"
+        onLoad={() => setIsGoogleMapsLoaded(true)}
       />
       <div className="min-h-screen bg-gray-50">
         {/* Header */}
@@ -872,34 +909,46 @@ export default function PurchaseWorkflow() {
                   <label htmlFor="address" className="block text-sm font-semibold text-gray-700 mb-2">
                     Street Address <span className="text-red-600">*</span>
                   </label>
-                  <Autocomplete
-                    apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}
-                    onPlaceSelected={(place) => {
-                      const address = place.formatted_address || '';
-                      setContactData({ ...contactData, address });
-                      
-                      // Try to extract city, state, zip from place
-                      const components = place.address_components || [];
-                      components.forEach((component: any) => {
-                        if (component.types.includes('locality')) {
-                          setContactData(prev => ({ ...prev, city: component.long_name }));
-                        }
-                        if (component.types.includes('administrative_area_level_1')) {
-                          setContactData(prev => ({ ...prev, state: component.short_name }));
-                        }
-                        if (component.types.includes('postal_code')) {
-                          setContactData(prev => ({ ...prev, zipCode: component.long_name }));
-                        }
-                      });
-                    }}
-                    options={{
-                      types: ['address'],
-                      componentRestrictions: { country: 'us' },
-                    }}
-                    defaultValue={contactData.address}
-                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-blue-600 text-gray-800"
-                    placeholder="Start typing your address..."
-                  />
+                  {isGoogleMapsLoaded ? (
+                    <Autocomplete
+                      onPlaceSelected={(place) => {
+                        if (!place) return;
+                        const address = place.formatted_address || '';
+                        setContactData({ ...contactData, address });
+                        
+                        // Try to extract city, state, zip from place
+                        const components = place.address_components || [];
+                        components.forEach((component: any) => {
+                          if (component.types.includes('locality')) {
+                            setContactData(prev => ({ ...prev, city: component.long_name }));
+                          }
+                          if (component.types.includes('administrative_area_level_1')) {
+                            setContactData(prev => ({ ...prev, state: component.short_name }));
+                          }
+                          if (component.types.includes('postal_code')) {
+                            setContactData(prev => ({ ...prev, zipCode: component.long_name }));
+                          }
+                        });
+                      }}
+                      options={{
+                        types: ['address'],
+                        componentRestrictions: { country: 'us' },
+                      }}
+                      defaultValue={contactData.address}
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-blue-600 text-gray-800"
+                      placeholder="Start typing your address..."
+                    />
+                  ) : (
+                    <input
+                      type="text"
+                      id="address"
+                      value={contactData.address}
+                      onChange={(e) => setContactData({ ...contactData, address: e.target.value })}
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-blue-600 text-gray-800 bg-gray-50"
+                      placeholder="Loading address autocomplete..."
+                      disabled
+                    />
+                  )}
                 </div>
 
                 {/* City, State, Zip Code Row */}
@@ -968,7 +1017,13 @@ export default function PurchaseWorkflow() {
                     Pick Up
                   </button>
                   <button
-                    onClick={() => setConfigurationData({ ...configurationData, deliveryMethod: 'ship' })}
+                    onClick={() => {
+                      setConfigurationData({ ...configurationData, deliveryMethod: 'ship' });
+                      // Auto-select first unit if nothing is selected
+                      if (!configurationData.selectedStock && sortedUnits.length > 0) {
+                        handleStockSelection(sortedUnits[0].stock);
+                      }
+                    }}
                     className={`px-8 py-3 font-semibold transition-colors ${
                       configurationData.deliveryMethod === 'ship'
                         ? 'bg-slate-700 text-white'
@@ -1239,18 +1294,6 @@ export default function PurchaseWorkflow() {
                     <label className="block text-lg font-semibold text-gray-700 mb-3">Power Package</label>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                       <button
-                        onClick={() => setConfigurationData({ ...configurationData, powerPackage: undefined })}
-                        className={`p-4 border-2 rounded-lg transition-all text-left ${
-                          !configurationData.powerPackage
-                            ? 'border-blue-600 bg-blue-50'
-                            : 'border-gray-300 hover:border-gray-400'
-                        }`}
-                      >
-                        <div className="font-semibold text-gray-900">None</div>
-                        <div className="text-sm text-gray-600">Standard Configuration</div>
-                      </button>
-                      
-                      <button
                         onClick={() => setConfigurationData({ ...configurationData, powerPackage: 'standard' })}
                         className={`p-4 border-2 rounded-lg transition-all text-left ${
                           configurationData.powerPackage === 'standard'
@@ -1258,8 +1301,8 @@ export default function PurchaseWorkflow() {
                             : 'border-gray-300 hover:border-gray-400'
                         }`}
                       >
-                        <div className="font-semibold text-gray-900">🔋 Standard Power</div>
-                        <div className="text-sm text-gray-600 mb-1">Two 6V batteries</div>
+                        <div className="font-semibold text-gray-900">🔋 2 Standard RV Batteries</div>
+                        <div className="text-sm text-gray-600 mb-1">$419 total</div>
                         <div className="text-blue-600 font-semibold">+{formatCurrency(419)}</div>
                         <div className="text-xs text-gray-500">or +{formatCurrency(Math.round(419 / 120))}/mo</div>
                       </button>
@@ -1272,8 +1315,8 @@ export default function PurchaseWorkflow() {
                             : 'border-gray-300 hover:border-gray-400'
                         }`}
                       >
-                        <div className="font-semibold text-gray-900">🔋🔋 Upgraded 6V</div>
-                        <div className="text-sm text-gray-600 mb-1">Four 6V batteries</div>
+                        <div className="font-semibold text-gray-900">🔋 2 6 Volt RV Batteries</div>
+                        <div className="text-sm text-gray-600 mb-1">$555 total</div>
                         <div className="text-blue-600 font-semibold">+{formatCurrency(555)}</div>
                         <div className="text-xs text-gray-500">or +{formatCurrency(Math.round(555 / 120))}/mo</div>
                       </button>
@@ -1286,8 +1329,8 @@ export default function PurchaseWorkflow() {
                             : 'border-gray-300 hover:border-gray-400'
                         }`}
                       >
-                        <div className="font-semibold text-gray-900">⚡ Lithium Package</div>
-                        <div className="text-sm text-gray-600 mb-1">Premium lithium batteries</div>
+                        <div className="font-semibold text-gray-900">⚡ 2 Upgraded Lithium RV Batteries</div>
+                        <div className="text-sm text-gray-600 mb-1">$1,299 total</div>
                         <div className="text-blue-600 font-semibold">+{formatCurrency(1299)}</div>
                         <div className="text-xs text-gray-500">or +{formatCurrency(Math.round(1299 / 120))}/mo</div>
                       </button>
@@ -1307,22 +1350,38 @@ export default function PurchaseWorkflow() {
                         }`}
                       >
                         <div className="font-semibold text-gray-900">None</div>
-                        <div className="text-sm text-gray-600">Standard Hitch</div>
+                        <div className="text-sm text-gray-600">Standard Configuration</div>
                       </button>
                       
-                      <button
-                        onClick={() => setConfigurationData({ ...configurationData, hitchPackage: 'anti-sway' })}
-                        className={`p-4 border-2 rounded-lg transition-all text-left ${
-                          configurationData.hitchPackage === 'anti-sway'
-                            ? 'border-blue-600 bg-blue-50'
-                            : 'border-gray-300 hover:border-gray-400'
-                        }`}
-                      >
-                        <div className="font-semibold text-gray-900">🔗 Anti-Sway Hitch</div>
-                        <div className="text-sm text-gray-600 mb-1">Enhanced stability and control</div>
-                        <div className="text-blue-600 font-semibold">+{formatCurrency(600)}</div>
-                        <div className="text-xs text-gray-500">or +{formatCurrency(Math.round(600 / 120))}/mo</div>
-                      </button>
+                      {selectedRV.type === 'FW' ? (
+                        <button
+                          onClick={() => setConfigurationData({ ...configurationData, hitchPackage: 'fifth-wheel' })}
+                          className={`p-4 border-2 rounded-lg transition-all text-left ${
+                            configurationData.hitchPackage === 'fifth-wheel'
+                              ? 'border-blue-600 bg-blue-50'
+                              : 'border-gray-300 hover:border-gray-400'
+                          }`}
+                        >
+                          <div className="font-semibold text-gray-900">🔗 5th Wheel Hitch Installation</div>
+                          <div className="text-sm text-gray-600 mb-1">Professional installation in truck bed</div>
+                          <div className="text-blue-600 font-semibold">+{formatCurrency(1200)}</div>
+                          <div className="text-xs text-gray-500">or +{formatCurrency(Math.round(1200 / 120))}/mo</div>
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => setConfigurationData({ ...configurationData, hitchPackage: 'anti-sway' })}
+                          className={`p-4 border-2 rounded-lg transition-all text-left ${
+                            configurationData.hitchPackage === 'anti-sway'
+                              ? 'border-blue-600 bg-blue-50'
+                              : 'border-gray-300 hover:border-gray-400'
+                          }`}
+                        >
+                          <div className="font-semibold text-gray-900">🔗 Anti-Sway Hitch</div>
+                          <div className="text-sm text-gray-600 mb-1">Enhanced stability and control</div>
+                          <div className="text-blue-600 font-semibold">+{formatCurrency(600)}</div>
+                          <div className="text-xs text-gray-500">or +{formatCurrency(Math.round(600 / 120))}/mo</div>
+                        </button>
+                      )}
                     </div>
                   </div>
 
@@ -1359,33 +1418,10 @@ export default function PurchaseWorkflow() {
                   </div>
                 </div>
 
-                {/* Cash vs Finance Toggle */}
+                {/* Financing Information - Auto-selected */}
                 <div className="mb-8">
-                  <label className="block text-xl font-bold text-gray-800 mb-4">Payment Method</label>
-                  <div className="inline-flex rounded-lg border-2 border-gray-300 overflow-hidden">
-                    <button
-                      onClick={() => setConfigurationData({ ...configurationData, paymentMethod: 'cash' })}
-                      className={`px-8 py-3 font-semibold transition-colors ${
-                        configurationData.paymentMethod === 'cash'
-                          ? 'bg-slate-700 text-white'
-                          : 'bg-white text-gray-700 hover:bg-gray-50'
-                      }`}
-                    >
-                      Cash
-                    </button>
-                    <button
-                      onClick={() => setConfigurationData({ ...configurationData, paymentMethod: 'finance' })}
-                      className={`px-8 py-3 font-semibold transition-colors ${
-                        configurationData.paymentMethod === 'finance'
-                          ? 'bg-slate-700 text-white'
-                          : 'bg-white text-gray-700 hover:bg-gray-50'
-                      }`}
-                    >
-                      Finance
-                    </button>
-                  </div>
-                  {configurationData.paymentMethod === 'finance' && selectedRV && (
-                    <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                  {selectedRV && (
+                    <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
                       <p className="text-sm text-blue-900 mb-2">
                         <strong>Kiewit Financing Benefits:</strong>
                       </p>
@@ -2002,34 +2038,45 @@ export default function PurchaseWorkflow() {
                 <label htmlFor="address" className="block text-xl font-bold text-gray-800 mb-4">
                   Street Address
                 </label>
-                <Autocomplete
-                  apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}
-                  onPlaceSelected={(place) => {
-                    const address = place.formatted_address || '';
-                    setContactData({ ...contactData, address });
-                    
-                    // Try to extract city, state, zip from place
-                    const components = place.address_components || [];
-                    components.forEach((component: any) => {
-                      if (component.types.includes('locality')) {
-                        setContactData(prev => ({ ...prev, city: component.long_name }));
-                      }
-                      if (component.types.includes('administrative_area_level_1')) {
-                        setContactData(prev => ({ ...prev, state: component.short_name }));
-                      }
-                      if (component.types.includes('postal_code')) {
-                        setContactData(prev => ({ ...prev, zipCode: component.long_name }));
-                      }
-                    });
-                  }}
-                  options={{
-                    types: ['address'],
-                    componentRestrictions: { country: 'us' },
-                  }}
-                  defaultValue={contactData.address}
-                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-[#B43732] text-gray-800"
-                  placeholder="Start typing your address..."
-                />
+                {isGoogleMapsLoaded ? (
+                  <Autocomplete
+                    onPlaceSelected={(place) => {
+                      const address = place.formatted_address || '';
+                      setContactData({ ...contactData, address });
+                      
+                      // Try to extract city, state, zip from place
+                      const components = place.address_components || [];
+                      components.forEach((component: any) => {
+                        if (component.types.includes('locality')) {
+                          setContactData(prev => ({ ...prev, city: component.long_name }));
+                        }
+                        if (component.types.includes('administrative_area_level_1')) {
+                          setContactData(prev => ({ ...prev, state: component.short_name }));
+                        }
+                        if (component.types.includes('postal_code')) {
+                          setContactData(prev => ({ ...prev, zipCode: component.long_name }));
+                        }
+                      });
+                    }}
+                    options={{
+                      types: ['address'],
+                      componentRestrictions: { country: 'us' },
+                    }}
+                    defaultValue={contactData.address}
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-[#B43732] text-gray-800"
+                    placeholder="Start typing your address..."
+                  />
+                ) : (
+                  <input
+                    type="text"
+                    id="address"
+                    value={contactData.address}
+                    onChange={(e) => setContactData({ ...contactData, address: e.target.value })}
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-[#B43732] text-gray-800 bg-gray-50"
+                    placeholder="Loading address autocomplete..."
+                    disabled
+                  />
+                )}
               </div>
 
               {/* City, State, Zip Code Row */}
@@ -2253,16 +2300,19 @@ export default function PurchaseWorkflow() {
                         <div className="text-gray-700 text-sm">ACCESSORIES</div>
                         <div className="ml-4 mt-1 space-y-0.5 text-xs text-gray-600">
                           {configurationData.powerPackage === 'standard' && (
-                            <div>• Standard Power Package</div>
+                            <div>• 2 Standard RV Batteries</div>
                           )}
                           {configurationData.powerPackage === '6volt' && (
-                            <div>• Upgraded 6V Package</div>
+                            <div>• 2 6 Volt RV Batteries</div>
                           )}
                           {configurationData.powerPackage === 'lithium' && (
-                            <div>• Lithium Package</div>
+                            <div>• 2 Upgraded Lithium RV Batteries</div>
                           )}
                           {configurationData.hitchPackage === 'anti-sway' && (
                             <div>• Anti-Sway Hitch</div>
+                          )}
+                          {configurationData.hitchPackage === 'fifth-wheel' && (
+                            <div>• 5th Wheel Hitch Installation</div>
                           )}
                           {configurationData.brakeControl === 'wireless' && (
                             <div>• Wireless Brake Controller</div>
@@ -2275,6 +2325,7 @@ export default function PurchaseWorkflow() {
                           (configurationData.powerPackage === '6volt' ? 555 : 0) +
                           (configurationData.powerPackage === 'lithium' ? 1299 : 0) +
                           (configurationData.hitchPackage === 'anti-sway' ? 600 : 0) +
+                          (configurationData.hitchPackage === 'fifth-wheel' ? 1200 : 0) +
                           (configurationData.brakeControl === 'wireless' ? 299 : 0)
                         )}
                       </div>
@@ -2322,8 +2373,8 @@ export default function PurchaseWorkflow() {
                   )}
 
                   <div className="flex justify-between px-6 py-3">
-                    <div className="text-gray-700 text-sm">SALES PREP (Get Ready, Orientation, Detail, etc.)</div>
-                    <div className="text-gray-700">{formatCurrency(calculateSalesPrepCost(calculateDiscountedPrice(selectedRV.price)))}</div>
+                    <div className="text-gray-700 text-sm line-through">SALES PREP (Get Ready, Orientation, Detail, etc.)</div>
+                    <div className="text-gray-700 font-semibold">Included</div>
                   </div>
 
                   <div className="flex justify-between px-6 py-3 bg-gray-50">
