@@ -1243,8 +1243,8 @@ export default function PurchaseWorkflow() {
                                     <>
                                       <div className="text-center">
                                         <p className="text-xs text-gray-500 mb-1">Shipping</p>
-                                        <p className="font-semibold text-blue-600 text-lg">{formatCurrency(shippingCost)}</p>
-                                        <p className="text-xs text-gray-600 mt-1">or {formatCurrency(shippingMonthly)}/mo</p>
+                                        <p className="font-semibold text-blue-600 text-lg">{formatCurrency(shippingMonthly)}/mo</p>
+                                        <p className="text-xs text-gray-500 mt-1">or {formatCurrency(shippingCost)}</p>
                                       </div>
                                       
                                       {/* Plus Sign - Centered */}
@@ -1255,8 +1255,8 @@ export default function PurchaseWorkflow() {
                                   {/* RV Price - RIGHT (always in same position) */}
                                   <div className="text-center">
                                     <p className="text-xs text-gray-500 mb-1">RV Price</p>
-                                    <p className="font-semibold text-blue-600 text-lg">{formatCurrency(discountedPrice)}</p>
-                                    <p className="text-xs text-gray-600 mt-1">or {formatCurrency(monthlyPayment)}/mo</p>
+                                    <p className="font-semibold text-blue-600 text-lg">{formatCurrency(monthlyPayment)}/mo</p>
+                                    <p className="text-xs text-gray-500 mt-1">or {formatCurrency(discountedPrice)}</p>
                                     <p className="text-xs text-gray-500 mt-1">MSRP: {formatCurrency(unit.price)}</p>
                                   </div>
                                 </div>
@@ -1270,8 +1270,8 @@ export default function PurchaseWorkflow() {
                                     {/* Grand Total - BELOW */}
                                     <div className="text-center">
                                       <p className="text-xs text-gray-700 font-semibold mb-1">Grand Total</p>
-                                      <p className="font-bold text-green-600 text-xl">{formatCurrency(grandTotal)}</p>
-                                      <p className="text-xs text-gray-600 mt-1">or {formatCurrency(grandTotalMonthly)}/mo</p>
+                                      <p className="font-bold text-green-600 text-xl">{formatCurrency(grandTotalMonthly)}/mo</p>
+                                      <p className="text-xs text-gray-500 mt-1">or {formatCurrency(grandTotal)}</p>
                                     </div>
                                   </>
                                 )}
@@ -1302,9 +1302,8 @@ export default function PurchaseWorkflow() {
                         }`}
                       >
                         <div className="font-semibold text-gray-900">🔋 2 Standard RV Batteries</div>
-                        <div className="text-sm text-gray-600 mb-1">$419 total</div>
-                        <div className="text-blue-600 font-semibold">+{formatCurrency(419)}</div>
-                        <div className="text-xs text-gray-500">or +{formatCurrency(Math.round(419 / 120))}/mo</div>
+                        <div className="text-blue-600 font-semibold">+{formatCurrency(Math.round(419 / 120))}/mo</div>
+                        <div className="text-xs text-gray-500">or +{formatCurrency(419)}</div>
                       </button>
                       
                       <button
@@ -1316,9 +1315,8 @@ export default function PurchaseWorkflow() {
                         }`}
                       >
                         <div className="font-semibold text-gray-900">🔋 2 6 Volt RV Batteries</div>
-                        <div className="text-sm text-gray-600 mb-1">$555 total</div>
-                        <div className="text-blue-600 font-semibold">+{formatCurrency(555)}</div>
-                        <div className="text-xs text-gray-500">or +{formatCurrency(Math.round(555 / 120))}/mo</div>
+                        <div className="text-blue-600 font-semibold">+{formatCurrency(Math.round(555 / 120))}/mo</div>
+                        <div className="text-xs text-gray-500">or +{formatCurrency(555)}</div>
                       </button>
                       
                       <button
@@ -1330,9 +1328,8 @@ export default function PurchaseWorkflow() {
                         }`}
                       >
                         <div className="font-semibold text-gray-900">⚡ 2 Upgraded Lithium RV Batteries</div>
-                        <div className="text-sm text-gray-600 mb-1">$1,299 total</div>
-                        <div className="text-blue-600 font-semibold">+{formatCurrency(1299)}</div>
-                        <div className="text-xs text-gray-500">or +{formatCurrency(Math.round(1299 / 120))}/mo</div>
+                        <div className="text-blue-600 font-semibold">+{formatCurrency(Math.round(1299 / 120))}/mo</div>
+                        <div className="text-xs text-gray-500">or +{formatCurrency(1299)}</div>
                       </button>
                     </div>
                   </div>
@@ -1364,8 +1361,8 @@ export default function PurchaseWorkflow() {
                         >
                           <div className="font-semibold text-gray-900">🔗 5th Wheel Hitch Installation</div>
                           <div className="text-sm text-gray-600 mb-1">Professional installation in truck bed</div>
-                          <div className="text-blue-600 font-semibold">+{formatCurrency(1200)}</div>
-                          <div className="text-xs text-gray-500">or +{formatCurrency(Math.round(1200 / 120))}/mo</div>
+                          <div className="text-blue-600 font-semibold">+{formatCurrency(Math.round(1200 / 120))}/mo</div>
+                          <div className="text-xs text-gray-500">or +{formatCurrency(1200)}</div>
                         </button>
                       ) : (
                         <button
@@ -1378,8 +1375,8 @@ export default function PurchaseWorkflow() {
                         >
                           <div className="font-semibold text-gray-900">🔗 Anti-Sway Hitch</div>
                           <div className="text-sm text-gray-600 mb-1">Enhanced stability and control</div>
-                          <div className="text-blue-600 font-semibold">+{formatCurrency(600)}</div>
-                          <div className="text-xs text-gray-500">or +{formatCurrency(Math.round(600 / 120))}/mo</div>
+                          <div className="text-blue-600 font-semibold">+{formatCurrency(Math.round(600 / 120))}/mo</div>
+                          <div className="text-xs text-gray-500">or +{formatCurrency(600)}</div>
                         </button>
                       )}
                     </div>
@@ -1411,8 +1408,8 @@ export default function PurchaseWorkflow() {
                       >
                         <div className="font-semibold text-gray-900">🛑 Wireless Brake Controller</div>
                         <div className="text-sm text-gray-600 mb-1">Easy installation, remote control</div>
-                        <div className="text-blue-600 font-semibold">+{formatCurrency(299)}</div>
-                        <div className="text-xs text-gray-500">or +{formatCurrency(Math.round(299 / 120))}/mo</div>
+                        <div className="text-blue-600 font-semibold">+{formatCurrency(Math.round(299 / 120))}/mo</div>
+                        <div className="text-xs text-gray-500">or +{formatCurrency(299)}</div>
                       </button>
                     </div>
                   </div>
@@ -1468,10 +1465,8 @@ export default function PurchaseWorkflow() {
                               <p className="text-sm text-gray-600">Comprehensive coverage for major systems and components beyond manufacturer warranty</p>
                             </div>
                             <div className="text-right ml-4 flex-shrink-0">
-                              <p className="font-bold text-gray-900">{formatCurrency(OWNERSHIP_PROTECTION_PRICES.extendedServiceContract)}</p>
-                              {configurationData.paymentMethod === 'finance' && (
-                                <p className="text-sm text-gray-600">{formatCurrency(OWNERSHIP_PROTECTION_PRICES.extendedServiceContract / 120)}/mo</p>
-                              )}
+                              <p className="font-bold text-gray-900">{formatCurrency(Math.round(OWNERSHIP_PROTECTION_PRICES.extendedServiceContract / 120))}/mo</p>
+                              <p className="text-sm text-gray-500">{formatCurrency(OWNERSHIP_PROTECTION_PRICES.extendedServiceContract)}</p>
                             </div>
                           </div>
                         </div>
@@ -1520,10 +1515,8 @@ export default function PurchaseWorkflow() {
                               <p className="text-sm text-gray-600">Guards against stains, fading, and damage to interior and exterior surfaces</p>
                             </div>
                             <div className="text-right ml-4 flex-shrink-0">
-                              <p className="font-bold text-gray-900">{formatCurrency(OWNERSHIP_PROTECTION_PRICES.paintAndFabric)}</p>
-                              {configurationData.paymentMethod === 'finance' && (
-                                <p className="text-sm text-gray-600">{formatCurrency(OWNERSHIP_PROTECTION_PRICES.paintAndFabric / 120)}/mo</p>
-                              )}
+                              <p className="font-bold text-gray-900">{formatCurrency(Math.round(OWNERSHIP_PROTECTION_PRICES.paintAndFabric / 120))}/mo</p>
+                              <p className="text-sm text-gray-500">{formatCurrency(OWNERSHIP_PROTECTION_PRICES.paintAndFabric)}</p>
                             </div>
                           </div>
                         </div>
@@ -1573,10 +1566,8 @@ export default function PurchaseWorkflow() {
                               <p className="text-sm text-gray-600">Covers repair or replacement costs from road hazard damage</p>
                             </div>
                             <div className="text-right ml-4 flex-shrink-0">
-                              <p className="font-bold text-gray-900">{formatCurrency(OWNERSHIP_PROTECTION_PRICES.tireAndWheel)}</p>
-                              {configurationData.paymentMethod === 'finance' && (
-                                <p className="text-sm text-gray-600">{formatCurrency(OWNERSHIP_PROTECTION_PRICES.tireAndWheel / 120)}/mo</p>
-                              )}
+                              <p className="font-bold text-gray-900">{formatCurrency(Math.round(OWNERSHIP_PROTECTION_PRICES.tireAndWheel / 120))}/mo</p>
+                              <p className="text-sm text-gray-500">{formatCurrency(OWNERSHIP_PROTECTION_PRICES.tireAndWheel)}</p>
                             </div>
                           </div>
                         </div>
@@ -1625,10 +1616,8 @@ export default function PurchaseWorkflow() {
                               <p className="text-sm text-gray-600">Advanced sealant protection against leaks and water damage</p>
                             </div>
                             <div className="text-right ml-4 flex-shrink-0">
-                              <p className="font-bold text-gray-900">{formatCurrency(OWNERSHIP_PROTECTION_PRICES.monsterSeal)}</p>
-                              {configurationData.paymentMethod === 'finance' && (
-                                <p className="text-sm text-gray-600">{formatCurrency(OWNERSHIP_PROTECTION_PRICES.monsterSeal / 120)}/mo</p>
-                              )}
+                              <p className="font-bold text-gray-900">{formatCurrency(Math.round(OWNERSHIP_PROTECTION_PRICES.monsterSeal / 120))}/mo</p>
+                              <p className="text-sm text-gray-500">{formatCurrency(OWNERSHIP_PROTECTION_PRICES.monsterSeal)}</p>
                             </div>
                           </div>
                         </div>
@@ -1678,10 +1667,8 @@ export default function PurchaseWorkflow() {
                               <p className="text-sm text-gray-600">Covers the difference between insurance payout and loan balance in case of total loss</p>
                             </div>
                             <div className="text-right ml-4 flex-shrink-0">
-                              <p className="font-bold text-gray-900">{formatCurrency(OWNERSHIP_PROTECTION_PRICES.gap)}</p>
-                              {configurationData.paymentMethod === 'finance' && (
-                                <p className="text-sm text-gray-600">{formatCurrency(OWNERSHIP_PROTECTION_PRICES.gap / 120)}/mo</p>
-                              )}
+                              <p className="font-bold text-gray-900">{formatCurrency(Math.round(OWNERSHIP_PROTECTION_PRICES.gap / 120))}/mo</p>
+                              <p className="text-sm text-gray-500">{formatCurrency(OWNERSHIP_PROTECTION_PRICES.gap)}</p>
                             </div>
                           </div>
                         </div>
@@ -1730,10 +1717,8 @@ export default function PurchaseWorkflow() {
                             <p className="text-sm text-gray-600">24/7 emergency roadside support including towing, fuel delivery, and tire changes</p>
                           </div>
                           <div className="text-right ml-4 flex-shrink-0">
-                            <p className="font-bold text-gray-900">{formatCurrency(OWNERSHIP_PROTECTION_PRICES.fiveYearRoadside)}</p>
-                            {configurationData.paymentMethod === 'finance' && (
-                              <p className="text-sm text-gray-600">{formatCurrency(OWNERSHIP_PROTECTION_PRICES.fiveYearRoadside / 120)}/mo</p>
-                            )}
+                            <p className="font-bold text-gray-900">{formatCurrency(Math.round(OWNERSHIP_PROTECTION_PRICES.fiveYearRoadside / 120))}/mo</p>
+                            <p className="text-sm text-gray-500">{formatCurrency(OWNERSHIP_PROTECTION_PRICES.fiveYearRoadside)}</p>
                           </div>
                         </div>
                       </div>
@@ -1782,10 +1767,8 @@ export default function PurchaseWorkflow() {
                               <p className="text-sm text-gray-600">Comprehensive lifestyle protection including trip interruption and vacation liability coverage</p>
                             </div>
                             <div className="text-right ml-4 flex-shrink-0">
-                              <p className="font-bold text-gray-900">{formatCurrency(OWNERSHIP_PROTECTION_PRICES.rvLife)}</p>
-                              {configurationData.paymentMethod === 'finance' && (
-                                <p className="text-sm text-gray-600">{formatCurrency(OWNERSHIP_PROTECTION_PRICES.rvLife / 120)}/mo</p>
-                              )}
+                              <p className="font-bold text-gray-900">{formatCurrency(Math.round(OWNERSHIP_PROTECTION_PRICES.rvLife / 120))}/mo</p>
+                              <p className="text-sm text-gray-500">{formatCurrency(OWNERSHIP_PROTECTION_PRICES.rvLife)}</p>
                             </div>
                           </div>
                         </div>
@@ -1834,10 +1817,8 @@ export default function PurchaseWorkflow() {
                               <p className="text-sm text-gray-600">Free battery replacement for the life of your RV ownership</p>
                             </div>
                             <div className="text-right ml-4 flex-shrink-0">
-                              <p className="font-bold text-gray-900">{formatCurrency(OWNERSHIP_PROTECTION_PRICES.lifetimeBattery)}</p>
-                              {configurationData.paymentMethod === 'finance' && (
-                                <p className="text-sm text-gray-600">{formatCurrency(OWNERSHIP_PROTECTION_PRICES.lifetimeBattery / 120)}/mo</p>
-                              )}
+                              <p className="font-bold text-gray-900">{formatCurrency(Math.round(OWNERSHIP_PROTECTION_PRICES.lifetimeBattery / 120))}/mo</p>
+                              <p className="text-sm text-gray-500">{formatCurrency(OWNERSHIP_PROTECTION_PRICES.lifetimeBattery)}</p>
                             </div>
                           </div>
                         </div>
@@ -1886,10 +1867,8 @@ export default function PurchaseWorkflow() {
                               <p className="text-sm text-gray-600">Complete coverage for roof repairs and replacement due to leaks or weather damage</p>
                             </div>
                             <div className="text-right ml-4 flex-shrink-0">
-                              <p className="font-bold text-gray-900">{formatCurrency(OWNERSHIP_PROTECTION_PRICES.roof)}</p>
-                              {configurationData.paymentMethod === 'finance' && (
-                                <p className="text-sm text-gray-600">{formatCurrency(OWNERSHIP_PROTECTION_PRICES.roof / 120)}/mo</p>
-                              )}
+                              <p className="font-bold text-gray-900">{formatCurrency(Math.round(OWNERSHIP_PROTECTION_PRICES.roof / 120))}/mo</p>
+                              <p className="text-sm text-gray-500">{formatCurrency(OWNERSHIP_PROTECTION_PRICES.roof)}</p>
                             </div>
                           </div>
                         </div>
@@ -2211,6 +2190,27 @@ export default function PurchaseWorkflow() {
                 </div>
               </div>
 
+              {/* Ownership Protection - Declined Message */}
+              {!Object.values(configurationData.ownershipProtection).some(selected => selected) && (
+                <div className="bg-amber-50 border-2 border-amber-300 rounded-lg p-6">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <h4 className="text-lg font-bold text-gray-800 mb-2">Ownership Protection Declined</h4>
+                      <p className="text-sm text-gray-700 mb-3">
+                        You have chosen to decline all ownership protection options. 
+                        Consider adding protection for peace of mind during your travels.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setCurrentStep('configuration')}
+                    className="text-blue-600 hover:text-blue-700 font-semibold text-sm underline"
+                  >
+                    ← Add Protection Options
+                  </button>
+                </div>
+              )}
+
               {/* Ownership Protection Selected */}
               {Object.values(configurationData.ownershipProtection).some(selected => selected) && (
                 <div className="bg-white border border-gray-300 rounded-lg overflow-hidden">
@@ -2279,23 +2279,35 @@ export default function PurchaseWorkflow() {
               {/* Pricing Breakdown */}
               <div className="bg-white border border-gray-300 rounded-lg overflow-hidden">
                 <div className="divide-y divide-gray-300">
-                  <div className="flex justify-between px-6 py-3">
+                  <div className="flex justify-between items-center px-6 py-3">
                     <div className="font-semibold text-gray-800 uppercase text-sm">RV PRICE (15% KIEWIT DISCOUNT)</div>
-                    <div className="font-semibold text-gray-800">
-                      {formatCurrency(calculateDiscountedPrice(selectedRV.price))}
+                    <div className="flex items-center gap-4">
+                      <div className="text-right min-w-[100px]">
+                        <div className="text-gray-500 text-sm font-normal">{formatCurrency(calculateDiscountedPrice(selectedRV.price))}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-semibold text-gray-900">{formatCurrency(Math.round(calculateDiscountedPrice(selectedRV.price) / 120))}/mo</div>
+                      </div>
                     </div>
                   </div>
 
                   {configurationData.deliveryMethod === 'ship' && unitDistances.get(selectedRV.stock) && (
-                    <div className="flex justify-between px-6 py-3">
+                    <div className="flex justify-between items-center px-6 py-3">
                       <div className="text-gray-700 text-sm">SHIPPING ({unitDistances.get(selectedRV.stock)} mi × $2.50)</div>
-                      <div className="text-gray-700">{formatCurrency(calculateShippingCost(unitDistances.get(selectedRV.stock)!))}</div>
+                      <div className="flex items-center gap-4">
+                        <div className="text-right min-w-[100px]">
+                          <div className="text-gray-500 text-sm font-normal">{formatCurrency(calculateShippingCost(unitDistances.get(selectedRV.stock)!))}</div>
+                        </div>
+                        <div className="text-right">
+                          <div className="font-semibold text-gray-900">{formatCurrency(Math.round(calculateShippingCost(unitDistances.get(selectedRV.stock)!) / 120))}/mo</div>
+                        </div>
+                      </div>
                     </div>
                   )}
 
                   {/* Accessories */}
                   {(configurationData.powerPackage || configurationData.hitchPackage || configurationData.brakeControl) && (
-                    <div className="flex justify-between px-6 py-3">
+                    <div className="flex justify-between items-start px-6 py-3">
                       <div>
                         <div className="text-gray-700 text-sm">ACCESSORIES</div>
                         <div className="ml-4 mt-1 space-y-0.5 text-xs text-gray-600">
@@ -2319,22 +2331,38 @@ export default function PurchaseWorkflow() {
                           )}
                         </div>
                       </div>
-                      <div className="text-gray-700">
-                        {formatCurrency(
-                          (configurationData.powerPackage === 'standard' ? 419 : 0) +
-                          (configurationData.powerPackage === '6volt' ? 555 : 0) +
-                          (configurationData.powerPackage === 'lithium' ? 1299 : 0) +
-                          (configurationData.hitchPackage === 'anti-sway' ? 600 : 0) +
-                          (configurationData.hitchPackage === 'fifth-wheel' ? 1200 : 0) +
-                          (configurationData.brakeControl === 'wireless' ? 299 : 0)
-                        )}
+                      <div className="flex items-center gap-4">
+                        <div className="text-right min-w-[100px]">
+                          <div className="text-gray-500 text-sm font-normal">
+                            {formatCurrency(
+                              (configurationData.powerPackage === 'standard' ? 419 : 0) +
+                              (configurationData.powerPackage === '6volt' ? 555 : 0) +
+                              (configurationData.powerPackage === 'lithium' ? 1299 : 0) +
+                              (configurationData.hitchPackage === 'anti-sway' ? 600 : 0) +
+                              (configurationData.hitchPackage === 'fifth-wheel' ? 1200 : 0) +
+                              (configurationData.brakeControl === 'wireless' ? 299 : 0)
+                            )}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="font-semibold text-gray-900">
+                            {formatCurrency(
+                              Math.round(((configurationData.powerPackage === 'standard' ? 419 : 0) +
+                              (configurationData.powerPackage === '6volt' ? 555 : 0) +
+                              (configurationData.powerPackage === 'lithium' ? 1299 : 0) +
+                              (configurationData.hitchPackage === 'anti-sway' ? 600 : 0) +
+                              (configurationData.hitchPackage === 'fifth-wheel' ? 1200 : 0) +
+                              (configurationData.brakeControl === 'wireless' ? 299 : 0)) / 120)
+                            )}/mo
+                          </div>
+                        </div>
                       </div>
                     </div>
                   )}
 
                   {calculateOwnershipProtectionTotal() > 0 && (
                     <>
-                      <div className="flex justify-between px-6 py-3">
+                      <div className="flex justify-between items-start px-6 py-3">
                         <div>
                           <div className="text-gray-700 text-sm">OWNERSHIP PROTECTION</div>
                           <div className="ml-4 mt-1 space-y-0.5 text-xs text-gray-600">
@@ -2367,30 +2395,59 @@ export default function PurchaseWorkflow() {
                             )}
                           </div>
                         </div>
-                        <div className="text-gray-700">{formatCurrency(calculateOwnershipProtectionTotal())}</div>
+                        <div className="flex items-center gap-4">
+                          <div className="text-right min-w-[100px]">
+                            <div className="text-gray-500 text-sm font-normal">{formatCurrency(calculateOwnershipProtectionTotal())}</div>
+                          </div>
+                          <div className="text-right">
+                            <div className="font-semibold text-gray-900">{formatCurrency(Math.round(calculateOwnershipProtectionTotal() / 120))}/mo</div>
+                          </div>
+                        </div>
                       </div>
                     </>
                   )}
 
-                  <div className="flex justify-between px-6 py-3">
+                  <div className="flex justify-between items-center px-6 py-3">
                     <div className="text-gray-700 text-sm line-through">SALES PREP (Get Ready, Orientation, Detail, etc.)</div>
                     <div className="text-gray-700 font-semibold">Included</div>
                   </div>
 
-                  <div className="flex justify-between px-6 py-3 bg-gray-50">
-                    <div className="text-gray-700 text-sm">SUBTOTAL</div>
-                    <div className="text-gray-700">{formatCurrency(calculateTotalPrice())}</div>
+                  {/* Divider before totals section */}
+                  <div className="h-3 bg-gray-100"></div>
+
+                  <div className="flex justify-between items-center px-6 py-3 bg-gray-50">
+                    <div className="text-gray-700 text-sm font-semibold">SUBTOTAL</div>
+                    <div className="flex items-center gap-4">
+                      <div className="text-right min-w-[100px]">
+                        <div className="text-gray-500 text-sm font-normal">{formatCurrency(calculateTotalPrice())}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-semibold text-gray-900">{formatCurrency(Math.round(calculateTotalPrice() / 120))}/mo</div>
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="flex justify-between px-6 py-3">
+                  <div className="flex justify-between items-center px-6 py-3">
                     <div className="text-gray-700 text-sm">ESTIMATED TAXES (6%)</div>
-                    <div className="text-gray-700">{formatCurrency(calculateTotalPrice() * 0.06)}</div>
+                    <div className="flex items-center gap-4">
+                      <div className="text-right min-w-[100px]">
+                        <div className="text-gray-500 text-sm font-normal">{formatCurrency(calculateTotalPrice() * 0.06)}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-semibold text-gray-900">{formatCurrency(Math.round((calculateTotalPrice() * 0.06) / 120))}/mo</div>
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="flex justify-between px-6 py-4 bg-gray-100">
+                  <div className="flex justify-between items-center px-6 py-4 bg-gray-100">
                     <div className="font-bold text-lg text-gray-800">TOTAL PURCHASE PRICE</div>
-                    <div className="font-bold text-lg text-gray-800">
-                      {formatCurrency(calculateTotalPrice() * 1.06)}
+                    <div className="flex items-center gap-4">
+                      <div className="text-right min-w-[100px]">
+                        <div className="text-gray-500 text-sm font-normal">{formatCurrency(calculateTotalPrice() * 1.06)}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-bold text-gray-900 text-lg">{formatCurrency(Math.round((calculateTotalPrice() * 1.06) / 120))}/mo</div>
+                      </div>
                     </div>
                   </div>
 
