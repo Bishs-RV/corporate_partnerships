@@ -1211,9 +1211,7 @@ export default function PurchaseWorkflow() {
                     {/* Extended Service Contract */}
                     <label className="flex items-start p-4 border-2 border-gray-300 rounded-lg hover:border-[#B43732] cursor-pointer transition-colors">
                       <div className="mt-1 flex-shrink-0">
-                        <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 text-xl">
-                          🛡️
-                        </div>
+                        
                       </div>
                       <input
                         type="checkbox"
@@ -1232,7 +1230,7 @@ export default function PurchaseWorkflow() {
                           <div>
                             <p className="font-semibold text-gray-900">Extended Service Contract</p>
                             <p className="text-sm text-gray-600 mb-1">Comprehensive coverage for major systems and components beyond manufacturer warranty</p>
-                            <p className="text-xs text-red-600 italic">⚠️ Without this: Unexpected mechanical failures could cost thousands in out-of-pocket repairs</p>
+                            
                           </div>
                           <div className="text-right ml-4">
                             <p className="font-bold text-gray-900">{formatCurrency(OWNERSHIP_PROTECTION_PRICES.extendedServiceContract)}</p>
@@ -1247,9 +1245,7 @@ export default function PurchaseWorkflow() {
                     {/* Paint & Fabric Protection */}
                     <label className="flex items-start p-4 border-2 border-gray-300 rounded-lg hover:border-[#B43732] cursor-pointer transition-colors">
                       <div className="mt-1 flex-shrink-0">
-                        <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center text-purple-600 text-xl">
-                          🎨
-                        </div>
+                        
                       </div>
                       <input
                         type="checkbox"
@@ -1268,7 +1264,7 @@ export default function PurchaseWorkflow() {
                           <div>
                             <p className="font-semibold text-gray-900">Paint & Fabric Protection</p>
                             <p className="text-sm text-gray-600 mb-1">Guards against stains, fading, and damage to interior and exterior surfaces</p>
-                            <p className="text-xs text-red-600 italic">⚠️ Without this: Stains, sun damage, and wear can significantly reduce your RV's resale value</p>
+                            
                           </div>
                           <div className="text-right ml-4">
                             <p className="font-bold text-gray-900">{formatCurrency(OWNERSHIP_PROTECTION_PRICES.paintAndFabric)}</p>
@@ -1283,9 +1279,7 @@ export default function PurchaseWorkflow() {
                     {/* Tire & Wheel Protection */}
                     <label className="flex items-start p-4 border-2 border-gray-300 rounded-lg hover:border-[#B43732] cursor-pointer transition-colors">
                       <div className="mt-1 flex-shrink-0">
-                        <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center text-gray-600 text-xl">
-                          🚗
-                        </div>
+                        
                       </div>
                       <input
                         type="checkbox"
@@ -1304,7 +1298,7 @@ export default function PurchaseWorkflow() {
                           <div>
                             <p className="font-semibold text-gray-900">Tire & Wheel Protection</p>
                             <p className="text-sm text-gray-600 mb-1">Covers repair or replacement costs from road hazard damage</p>
-                            <p className="text-xs text-red-600 italic">⚠️ Without this: A single RV tire replacement can cost $400-600, multiply that by 6 tires</p>
+                            
                           </div>
                           <div className="text-right ml-4">
                             <p className="font-bold text-gray-900">{formatCurrency(OWNERSHIP_PROTECTION_PRICES.tireAndWheel)}</p>
@@ -1319,9 +1313,7 @@ export default function PurchaseWorkflow() {
                     {/* Monster Seal Protection */}
                     <label className="flex items-start p-4 border-2 border-gray-300 rounded-lg hover:border-[#B43732] cursor-pointer transition-colors">
                       <div className="mt-1 flex-shrink-0">
-                        <div className="w-10 h-10 bg-cyan-100 rounded-full flex items-center justify-center text-cyan-600 text-xl">
-                          💧
-                        </div>
+                        
                       </div>
                       <input
                         type="checkbox"
@@ -1340,7 +1332,7 @@ export default function PurchaseWorkflow() {
                           <div>
                             <p className="font-semibold text-gray-900">Monster Seal Protection</p>
                             <p className="text-sm text-gray-600 mb-1">Advanced sealant protection against leaks and water damage</p>
-                            <p className="text-xs text-red-600 italic">⚠️ Without this: Water leaks are the #1 cause of RV structural damage costing $5,000-$15,000 to repair</p>
+                            
                           </div>
                           <div className="text-right ml-4">
                             <p className="font-bold text-gray-900">{formatCurrency(OWNERSHIP_PROTECTION_PRICES.monsterSeal)}</p>
@@ -1355,9 +1347,7 @@ export default function PurchaseWorkflow() {
                     {/* GAP Protection */}
                     <label className="flex items-start p-4 border-2 border-gray-300 rounded-lg hover:border-[#B43732] cursor-pointer transition-colors">
                       <div className="mt-1 flex-shrink-0">
-                        <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center text-green-600 text-xl">
-                          💰
-                        </div>
+                        
                       </div>
                       <input
                         type="checkbox"
@@ -1376,7 +1366,7 @@ export default function PurchaseWorkflow() {
                           <div>
                             <p className="font-semibold text-gray-900">GAP Coverage</p>
                             <p className="text-sm text-gray-600 mb-1">Covers the difference between insurance payout and loan balance in case of total loss</p>
-                            <p className="text-xs text-red-600 italic">⚠️ Without this: If totaled, you could owe $10,000+ more than insurance pays, leaving you with debt and no RV</p>
+                            
                           </div>
                           <div className="text-right ml-4">
                             <p className="font-bold text-gray-900">{formatCurrency(OWNERSHIP_PROTECTION_PRICES.gap)}</p>
@@ -1391,9 +1381,7 @@ export default function PurchaseWorkflow() {
                     {/* 5 Year Roadside Assistance */}
                     <label className="flex items-start p-4 border-2 border-gray-300 rounded-lg hover:border-[#B43732] cursor-pointer transition-colors">
                       <div className="mt-1 flex-shrink-0">
-                        <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center text-orange-600 text-xl">
-                          🚨
-                        </div>
+                        
                       </div>
                       <input
                         type="checkbox"
@@ -1412,7 +1400,7 @@ export default function PurchaseWorkflow() {
                           <div>
                             <p className="font-semibold text-gray-900">5-Year Roadside Assistance</p>
                             <p className="text-sm text-gray-600 mb-1">24/7 emergency roadside support including towing, fuel delivery, and tire changes</p>
-                            <p className="text-xs text-red-600 italic">⚠️ Without this: A single RV tow can cost $500-1,500+ depending on distance, stranding you mid-trip</p>
+                            
                           </div>
                           <div className="text-right ml-4">
                             <p className="font-bold text-gray-900">{formatCurrency(OWNERSHIP_PROTECTION_PRICES.fiveYearRoadside)}</p>
@@ -1427,9 +1415,7 @@ export default function PurchaseWorkflow() {
                     {/* RV Life Protection */}
                     <label className="flex items-start p-4 border-2 border-gray-300 rounded-lg hover:border-[#B43732] cursor-pointer transition-colors">
                       <div className="mt-1 flex-shrink-0">
-                        <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 text-xl">
-                          🏕️
-                        </div>
+                        
                       </div>
                       <input
                         type="checkbox"
@@ -1448,7 +1434,7 @@ export default function PurchaseWorkflow() {
                           <div>
                             <p className="font-semibold text-gray-900">RV Life Protection</p>
                             <p className="text-sm text-gray-600 mb-1">Comprehensive lifestyle protection including trip interruption and vacation liability coverage</p>
-                            <p className="text-xs text-red-600 italic">⚠️ Without this: Trip cancellations or injuries at campgrounds could result in lost vacation costs and liability claims</p>
+                            
                           </div>
                           <div className="text-right ml-4">
                             <p className="font-bold text-gray-900">{formatCurrency(OWNERSHIP_PROTECTION_PRICES.rvLife)}</p>
@@ -1463,9 +1449,7 @@ export default function PurchaseWorkflow() {
                     {/* Lifetime Battery Protection */}
                     <label className="flex items-start p-4 border-2 border-gray-300 rounded-lg hover:border-[#B43732] cursor-pointer transition-colors">
                       <div className="mt-1 flex-shrink-0">
-                        <div className="w-10 h-10 bg-yellow-100 rounded-full flex items-center justify-center text-yellow-600 text-xl">
-                          🔋
-                        </div>
+                        
                       </div>
                       <input
                         type="checkbox"
@@ -1484,7 +1468,7 @@ export default function PurchaseWorkflow() {
                           <div>
                             <p className="font-semibold text-gray-900">Lifetime Battery Replacement</p>
                             <p className="text-sm text-gray-600 mb-1">Free battery replacement for the life of your RV ownership</p>
-                            <p className="text-xs text-red-600 italic">⚠️ Without this: Replacing RV house batteries every 3-5 years at $200-400 each adds up over time</p>
+                            
                           </div>
                           <div className="text-right ml-4">
                             <p className="font-bold text-gray-900">{formatCurrency(OWNERSHIP_PROTECTION_PRICES.lifetimeBattery)}</p>
@@ -1499,9 +1483,7 @@ export default function PurchaseWorkflow() {
                     {/* Roof Protection */}
                     <label className="flex items-start p-4 border-2 border-gray-300 rounded-lg hover:border-[#B43732] cursor-pointer transition-colors">
                       <div className="mt-1 flex-shrink-0">
-                        <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center text-red-600 text-xl">
-                          🏠
-                        </div>
+                        
                       </div>
                       <input
                         type="checkbox"
@@ -1520,7 +1502,7 @@ export default function PurchaseWorkflow() {
                           <div>
                             <p className="font-semibold text-gray-900">Roof Protection Plan</p>
                             <p className="text-sm text-gray-600 mb-1">Complete coverage for roof repairs and replacement due to leaks or weather damage</p>
-                            <p className="text-xs text-red-600 italic">⚠️ Without this: Roof replacement costs $8,000-$12,000 and roof damage voids most warranties</p>
+                            
                           </div>
                           <div className="text-right ml-4">
                             <p className="font-bold text-gray-900">{formatCurrency(OWNERSHIP_PROTECTION_PRICES.roof)}</p>
