@@ -28,6 +28,13 @@ export default function LocationsMap({ apiKey }: LocationsMapProps) {
   const [error, setError] = useState<string | null>(null);
   const [isGoogleMapsLoaded, setIsGoogleMapsLoaded] = useState(false);
 
+  // Check if Google Maps is already loaded
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.google && window.google.maps) {
+      setIsGoogleMapsLoaded(true);
+    }
+  }, []);
+
   useEffect(() => {
     // Fetch locations
     const fetchLocations = async () => {
@@ -151,7 +158,7 @@ export default function LocationsMap({ apiKey }: LocationsMapProps) {
   return (
     <>
       <Script
-        src={`https://maps.googleapis.com/maps/api/js?key=${apiKey}`}
+        src={`https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`}
         onLoad={() => setIsGoogleMapsLoaded(true)}
         strategy="afterInteractive"
       />

@@ -207,34 +207,43 @@ export default function PurchaseWorkflow() {
   useEffect(() => {
     const checkGoogleMapsLoaded = () => {
       if (typeof window !== 'undefined' && window.google && window.google.maps && window.google.maps.places) {
+        console.log('Google Maps API loaded successfully');
         setIsGoogleMapsLoaded(true);
         return true;
       }
       return false;
     };
 
-    // Check immediately
+    // Check immediately - it might already be loaded from another component
     if (checkGoogleMapsLoaded()) {
       return;
     }
 
-    // Poll for the API to be loaded
+    // Poll for the API to be loaded with timeout
+    let attempts = 0;
+    const maxAttempts = 100; // 10 seconds max (increased for production)
     const interval = setInterval(() => {
+      attempts++;
       if (checkGoogleMapsLoaded()) {
         clearInterval(interval);
+      } else if (attempts >= maxAttempts) {
+        console.error('Google Maps API failed to load after 10 seconds');
+        console.error('Check if API key is set:', !!process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY);
+        clearInterval(interval);
+        // Still set to true to allow manual address entry
+        setIsGoogleMapsLoaded(true);
       }
     }, 100);
 
     // Also check on window load in case it's still loading
     if (typeof window !== 'undefined') {
-      window.addEventListener('load', checkGoogleMapsLoaded);
+      window.addEventListener('load', () => {
+        setTimeout(checkGoogleMapsLoaded, 100);
+      });
     }
 
     return () => {
       clearInterval(interval);
-      if (typeof window !== 'undefined') {
-        window.removeEventListener('load', checkGoogleMapsLoaded);
-      }
     };
   }, []);
 
@@ -466,33 +475,39 @@ export default function PurchaseWorkflow() {
         !contactData.address.trim() || !contactData.city.trim() || 
         !contactData.state.trim() || !contactData.zipCode.trim() || 
         contactData.zipCode.length !== 5) {
+      console.log('Validation failed: Customer information incomplete');
       return false;
     }
 
     // Check stock selection
     if (!configurationData.selectedStock) {
+      console.log('Validation failed: No stock selected');
       return false;
     }
 
     // Check ownership protection opt-out
     const hasAnyProtection = Object.values(configurationData.ownershipProtection).some(selected => selected);
     if (!hasAnyProtection && !protectionOptOut) {
+      console.log('Validation failed: No protection selected and opt-out not checked');
       return false;
     }
 
     // Check shipping address if Ship To is selected
     if (configurationData.deliveryMethod === 'ship') {
+      // If same as customer address, shipping is valid as long as customer address is valid (already checked above)
       if (!configurationData.shippingAddressSameAsCustomer) {
         if (!configurationData.shippingAddress?.trim() || 
             !configurationData.shippingCity?.trim() || 
             !configurationData.shippingState?.trim() || 
             !configurationData.shippingZipCode?.trim() || 
             configurationData.shippingZipCode.length !== 5) {
+          console.log('Validation failed: Shipping address incomplete');
           return false;
         }
       }
     }
 
+    console.log('Validation passed!');
     return true;
   };
 
@@ -731,8 +746,16 @@ export default function PurchaseWorkflow() {
     <>
       <Script
         src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places`}
-        strategy="beforeInteractive"
-        onLoad={() => setIsGoogleMapsLoaded(true)}
+        strategy="afterInteractive"
+        onLoad={() => {
+          console.log('Google Maps Script onLoad fired');
+          setIsGoogleMapsLoaded(true);
+        }}
+        onError={(e) => {
+          console.error('Failed to load Google Maps script:', e);
+          // Allow manual address entry even if autocomplete fails
+          setIsGoogleMapsLoaded(true);
+        }}
       />
       <div className="min-h-screen bg-gray-50">
         {/* Header */}
