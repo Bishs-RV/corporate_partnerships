@@ -141,71 +141,83 @@ export default function Home() {
                 Your journey to RV ownership. Simplified in these easy steps.
               </p>
 
-              <div className="flex flex-col md:flex-row items-start justify-between gap-6 md:gap-2">
+              <div className="flex flex-col md:flex-row items-center justify-center gap-2 md:gap-2 max-w-5xl mx-auto">
                 {/* Step 1 - Sign In */}
-                <div className="relative text-center flex-1">
-                  <h3 className="font-semibold text-gray-900 mb-1 text-sm">Sign In</h3>
-                  <p className="text-xs text-gray-600">
+                <div className="relative text-center flex-1 w-full md:w-auto">
+                  <h3 className="font-semibold text-gray-900 mb-0.5 text-base md:text-sm">Sign In</h3>
+                  <p className="text-sm md:text-xs text-gray-600">
                     Access with your Kiewit email
                   </p>
                 </div>
 
-                {/* Connector */}
-                <div className="hidden md:block text-gray-300">
-                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                {/* Connector - Down arrow on mobile, right arrow on desktop */}
+                <div className="text-gray-300 -my-1">
+                  <svg className="w-6 h-6 md:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                  <svg className="w-8 h-8 hidden md:block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
                   </svg>
                 </div>
 
                 {/* Step 2 - Browse */}
-                <div className="relative text-center flex-1">
-                  <h3 className="font-semibold text-gray-900 mb-1 text-sm">Browse</h3>
-                  <p className="text-xs text-gray-600">
+                <div className="relative text-center flex-1 w-full md:w-auto">
+                  <h3 className="font-semibold text-gray-900 mb-0.5 text-base md:text-sm">Browse</h3>
+                  <p className="text-sm md:text-xs text-gray-600">
                     Find your perfect RV
                   </p>
                 </div>
 
                 {/* Connector */}
-                <div className="hidden md:block text-gray-300">
-                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="text-gray-300 -my-1">
+                  <svg className="w-6 h-6 md:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                  <svg className="w-8 h-8 hidden md:block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
                   </svg>
                 </div>
 
                 {/* Step 3 - Customize */}
-                <div className="relative text-center flex-1">
-                  <h3 className="font-semibold text-gray-900 mb-1 text-sm">Customize</h3>
-                  <p className="text-xs text-gray-600">
+                <div className="relative text-center flex-1 w-full md:w-auto">
+                  <h3 className="font-semibold text-gray-900 mb-0.5 text-base md:text-sm">Customize</h3>
+                  <p className="text-sm md:text-xs text-gray-600">
                     Choose accessories & location
                   </p>
                 </div>
 
                 {/* Connector */}
-                <div className="hidden md:block text-gray-300">
-                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="text-gray-300 -my-1">
+                  <svg className="w-6 h-6 md:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                  <svg className="w-8 h-8 hidden md:block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
                   </svg>
                 </div>
 
                 {/* Step 4 - Finance */}
-                <div className="relative text-center flex-1">
-                  <h3 className="font-semibold text-gray-900 mb-1 text-sm">Finance</h3>
-                  <p className="text-xs text-gray-600">
+                <div className="relative text-center flex-1 w-full md:w-auto">
+                  <h3 className="font-semibold text-gray-900 mb-0.5 text-base md:text-sm">Finance</h3>
+                  <p className="text-sm md:text-xs text-gray-600">
                     Complete with preferred lender
                   </p>
                 </div>
 
                 {/* Connector */}
-                <div className="hidden md:block text-gray-300">
-                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="text-gray-300 -my-1">
+                  <svg className="w-6 h-6 md:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                  <svg className="w-8 h-8 hidden md:block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
                   </svg>
                 </div>
 
                 {/* Step 5 - Delivery */}
-                <div className="relative text-center flex-1">
-                  <h3 className="font-semibold text-gray-900 mb-1 text-sm">Delivery</h3>
-                  <p className="text-xs text-gray-600">
+                <div className="relative text-center flex-1 w-full md:w-auto">
+                  <h3 className="font-semibold text-gray-900 mb-0.5 text-base md:text-sm">Delivery</h3>
+                  <p className="text-sm md:text-xs text-gray-600">
                     Get delivery & orientation
                   </p>
                 </div>

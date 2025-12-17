@@ -1234,20 +1234,20 @@ export default function PurchaseWorkflow() {
                           <button
                             key={unit.stock}
                             onClick={() => handleStockSelection(unit.stock)}
-                            className={`w-full text-left p-4 border-2 rounded-lg transition-all ${
+                            className={`w-full text-left p-3 md:p-4 border-2 rounded-lg transition-all ${
                               configurationData.selectedStock === unit.stock
                                 ? 'border-blue-600 bg-blue-50'
                                 : 'border-gray-300 hover:border-gray-400'
                             }`}
                           >
-                            <div className="flex justify-between items-start">
-                              <div className="flex-1">
-                                <p className="font-semibold text-gray-900">Stock #{unit.stock}</p>
-                                <p className="text-sm text-gray-600">{getFullLocationName(unit)}</p>
+                            <div className="flex justify-between items-start gap-2">
+                              <div className="flex-1 min-w-0">
+                                <p className="font-semibold text-gray-900 text-sm md:text-base">Stock #{unit.stock}</p>
+                                <p className="text-xs md:text-sm text-gray-600 truncate">{getFullLocationName(unit)}</p>
                                 
                                 {/* Show distance for both pickup and ship-to */}
                                 {showDistance && (
-                                  <p className="text-sm text-blue-600 font-medium mt-1">
+                                  <p className="text-xs md:text-sm text-blue-600 font-medium mt-1">
                                     📍 {distance.toFixed(0)} miles away
                                   </p>
                                 )}
@@ -1258,29 +1258,29 @@ export default function PurchaseWorkflow() {
                               </div>
                               
                               {/* Pricing Section */}
-                              <div className="ml-4 min-w-[320px]">
+                              <div className="flex-shrink-0">
                                 {/* Top row - Shipping (if ship-to) + RV Price */}
-                                <div className="flex items-start justify-center gap-6 mb-2">
+                                <div className="flex items-start justify-end gap-1 md:gap-3 mb-1 md:mb-2">
                                   {/* Shipping Cost - LEFT (only show for ship-to) */}
                                   {isShipTo && shippingCost > 0 && (
                                     <>
                                       <div className="text-center">
-                                        <p className="text-xs text-gray-500 mb-1">Shipping</p>
-                                        <p className="font-semibold text-blue-600 text-lg">{formatCurrency(shippingMonthly)}/mo</p>
-                                        <p className="text-xs text-gray-500 mt-1">or {formatCurrency(shippingCost)}</p>
+                                        <p className="text-[10px] md:text-xs text-gray-500 mb-0.5">Shipping</p>
+                                        <p className="font-semibold text-blue-600 text-xs md:text-lg whitespace-nowrap">{formatCurrency(shippingMonthly)}/mo</p>
+                                        <p className="text-[10px] md:text-xs text-gray-500">or {formatCurrency(shippingCost)}</p>
                                       </div>
                                       
                                       {/* Plus Sign - Centered */}
-                                      <div className="text-2xl font-bold text-gray-600 flex items-center">+</div>
+                                      <div className="text-base md:text-2xl font-bold text-gray-600 flex items-center px-0.5">+</div>
                                     </>
                                   )}
                                   
                                   {/* RV Price - RIGHT (always in same position) */}
                                   <div className="text-center">
-                                    <p className="text-xs text-gray-500 mb-1">RV Price</p>
-                                    <p className="font-semibold text-blue-600 text-lg">{formatCurrency(monthlyPayment)}/mo</p>
-                                    <p className="text-xs text-gray-500 mt-1">or {formatCurrency(discountedPrice)}</p>
-                                    <p className="text-xs text-gray-500 mt-1">MSRP: {formatCurrency(unit.price)}</p>
+                                    <p className="text-[10px] md:text-xs text-gray-500 mb-0.5">RV Price</p>
+                                    <p className="font-semibold text-blue-600 text-xs md:text-lg whitespace-nowrap">{formatCurrency(monthlyPayment)}/mo</p>
+                                    <p className="text-[10px] md:text-xs text-gray-500">or {formatCurrency(discountedPrice)}</p>
+                                    <p className="text-[10px] md:text-xs text-gray-500">MSRP: {formatCurrency(unit.price)}</p>
                                   </div>
                                 </div>
                                 
@@ -1288,13 +1288,13 @@ export default function PurchaseWorkflow() {
                                 {isShipTo && shippingCost > 0 && (
                                   <>
                                     {/* Equals Line */}
-                                    <div className="border-t-2 border-gray-400 my-2"></div>
+                                    <div className="border-t border-gray-400 my-1 md:my-2"></div>
                                     
                                     {/* Grand Total - BELOW */}
                                     <div className="text-center">
-                                      <p className="text-xs text-gray-700 font-semibold mb-1">Grand Total</p>
-                                      <p className="font-bold text-green-600 text-xl">{formatCurrency(grandTotalMonthly)}/mo</p>
-                                      <p className="text-xs text-gray-500 mt-1">or {formatCurrency(grandTotal)}</p>
+                                      <p className="text-[10px] md:text-xs text-gray-700 font-semibold mb-0.5">Grand Total</p>
+                                      <p className="font-bold text-green-600 text-sm md:text-xl whitespace-nowrap">{formatCurrency(grandTotalMonthly)}/mo</p>
+                                      <p className="text-[10px] md:text-xs text-gray-500">or {formatCurrency(grandTotal)}</p>
                                     </div>
                                   </>
                                 )}
