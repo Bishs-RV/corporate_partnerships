@@ -23,6 +23,17 @@ interface ConfigurationData {
   shippingCity?: string;
   shippingState?: string;
   shippingZipCode?: string;
+  ownershipProtection: {
+    extendedServiceContract: boolean;
+    paintAndFabric: boolean;
+    tireAndWheel: boolean;
+    monsterSeal: boolean;
+    gap: boolean;
+    fiveYearRoadside: boolean;
+    rvLife: boolean;
+    lifetimeBattery: boolean;
+    roof: boolean;
+  };
 }
 
 interface ContactData {
@@ -68,11 +79,23 @@ export default function PurchaseWorkflow() {
   const [isDrawing, setIsDrawing] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [userZip, setUserZip] = useState<string>('');
+  const [protectionOptOut, setProtectionOptOut] = useState(false);
 
   const [configurationData, setConfigurationData] = useState<ConfigurationData>({
     paymentMethod: 'cash',
     deliveryMethod: 'pickup',
     shippingAddressSameAsCustomer: true,
+    ownershipProtection: {
+      extendedServiceContract: false,
+      paintAndFabric: false,
+      tireAndWheel: false,
+      monsterSeal: false,
+      gap: false,
+      fiveYearRoadside: false,
+      rvLife: false,
+      lifetimeBattery: false,
+      roof: false,
+    },
   });
 
   const [contactData, setContactData] = useState<ContactData>({
@@ -259,6 +282,52 @@ export default function PurchaseWorkflow() {
     return totalShippingCost / SHIPPING_FINANCE_MONTHS;
   };
 
+  // Ownership Protection Pricing
+  const OWNERSHIP_PROTECTION_PRICES = {
+    extendedServiceContract: 2287,
+    paintAndFabric: 995,
+    tireAndWheel: 747.50,
+    monsterSeal: 1023,
+    gap: 975,
+    fiveYearRoadside: 240,
+    rvLife: 780,
+    lifetimeBattery: 615,
+    roof: 1713.50,
+  };
+
+  const calculateOwnershipProtectionTotal = () => {
+    let total = 0;
+    Object.entries(configurationData.ownershipProtection).forEach(([key, selected]) => {
+      if (selected) {
+        total += OWNERSHIP_PROTECTION_PRICES[key as keyof typeof OWNERSHIP_PROTECTION_PRICES];
+      }
+    });
+    return total;
+  };
+
+  const calculateTotalPrice = () => {
+    if (!selectedRV) return 0;
+    let total = calculateDiscountedPrice(selectedRV.price);
+    
+    // Add option prices
+    if (configurationData.powerPackage === 'standard') total += 419;
+    if (configurationData.powerPackage === '6volt') total += 555;
+    if (configurationData.powerPackage === 'lithium') total += 1299;
+    if (configurationData.hitchPackage === 'anti-sway') total += 600;
+    if (configurationData.brakeControl === 'wireless') total += 299;
+    
+    // Add shipping cost
+    const distance = unitDistances.get(selectedRV.stock);
+    const shippingCost = configurationData.deliveryMethod === 'ship' && distance ? calculateShippingCost(distance) : 0;
+    total += shippingCost;
+    
+    // Add protection costs
+    const protectionCost = calculateOwnershipProtectionTotal();
+    total += protectionCost;
+    
+    return total;
+  };
+
   const getFullLocationName = (unit: RV) => {
     // Try to find location by cmfId first
     if (unit.cmfId) {
@@ -321,19 +390,6 @@ export default function PurchaseWorkflow() {
     } finally {
       setIsCalculatingDistances(false);
     }
-  };
-
-  const calculateTotalPrice = () => {
-    let total = calculateDiscountedPrice(selectedRV?.price || 0);
-    
-    // Add option prices
-    if (configurationData.powerPackage === 'standard') total += 419;
-    if (configurationData.powerPackage === '6volt') total += 555;
-    if (configurationData.powerPackage === 'lithium') total += 1299;
-    if (configurationData.hitchPackage === 'anti-sway') total += 600;
-    if (configurationData.brakeControl === 'wireless') total += 299;
-    
-    return total;
   };
 
   const handleStockSelection = (stock: string) => {
@@ -1132,7 +1188,7 @@ export default function PurchaseWorkflow() {
                         <strong>Kiewit Financing Benefits:</strong>
                       </p>
                       <ul className="text-sm text-blue-800 space-y-1">
-                        <li>• 5.25% APR for 120 months (10 years)</li>
+                        <li>• 0% APR for 120 months (10 years)</li>
                         <li>• 20% down payment required</li>
                         <li>• Estimated monthly payment: <strong>{formatCurrency((() => {
                           const discountedPrice = calculateDiscountedPrice(selectedRV.price);
@@ -1144,6 +1200,338 @@ export default function PurchaseWorkflow() {
                       </ul>
                     </div>
                   )}
+                </div>
+
+                {/* Ownership Protection Section */}
+                <div className="mb-8">
+                  <label className="block text-xl font-bold text-gray-800 mb-4">Ownership Protection</label>
+                  <p className="text-gray-600 mb-4">Protect your investment with these optional coverage plans</p>
+                  
+                  <div className="space-y-3">
+                    {/* Extended Service Contract */}
+                    <label className="flex items-start p-4 border-2 border-gray-300 rounded-lg hover:border-[#B43732] cursor-pointer transition-colors">
+                      <div className="mt-1 flex-shrink-0">
+                        <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 text-xl">
+                          🛡️
+                        </div>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={configurationData.ownershipProtection.extendedServiceContract}
+                        onChange={(e) => setConfigurationData({
+                          ...configurationData,
+                          ownershipProtection: {
+                            ...configurationData.ownershipProtection,
+                            extendedServiceContract: e.target.checked
+                          }
+                        })}
+                        className="mt-1 ml-3 h-5 w-5 text-[#B43732] focus:ring-[#B43732] rounded"
+                      />
+                      <div className="ml-3 flex-1">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className="font-semibold text-gray-900">Extended Service Contract</p>
+                            <p className="text-sm text-gray-600 mb-1">Comprehensive coverage for major systems and components beyond manufacturer warranty</p>
+                            <p className="text-xs text-red-600 italic">⚠️ Without this: Unexpected mechanical failures could cost thousands in out-of-pocket repairs</p>
+                          </div>
+                          <div className="text-right ml-4">
+                            <p className="font-bold text-gray-900">{formatCurrency(OWNERSHIP_PROTECTION_PRICES.extendedServiceContract)}</p>
+                            {configurationData.paymentMethod === 'finance' && (
+                              <p className="text-sm text-gray-600">{formatCurrency(OWNERSHIP_PROTECTION_PRICES.extendedServiceContract / 120)}/mo</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </label>
+
+                    {/* Paint & Fabric Protection */}
+                    <label className="flex items-start p-4 border-2 border-gray-300 rounded-lg hover:border-[#B43732] cursor-pointer transition-colors">
+                      <div className="mt-1 flex-shrink-0">
+                        <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center text-purple-600 text-xl">
+                          🎨
+                        </div>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={configurationData.ownershipProtection.paintAndFabric}
+                        onChange={(e) => setConfigurationData({
+                          ...configurationData,
+                          ownershipProtection: {
+                            ...configurationData.ownershipProtection,
+                            paintAndFabric: e.target.checked
+                          }
+                        })}
+                        className="mt-1 ml-3 h-5 w-5 text-[#B43732] focus:ring-[#B43732] rounded"
+                      />
+                      <div className="ml-3 flex-1">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className="font-semibold text-gray-900">Paint & Fabric Protection</p>
+                            <p className="text-sm text-gray-600 mb-1">Guards against stains, fading, and damage to interior and exterior surfaces</p>
+                            <p className="text-xs text-red-600 italic">⚠️ Without this: Stains, sun damage, and wear can significantly reduce your RV's resale value</p>
+                          </div>
+                          <div className="text-right ml-4">
+                            <p className="font-bold text-gray-900">{formatCurrency(OWNERSHIP_PROTECTION_PRICES.paintAndFabric)}</p>
+                            {configurationData.paymentMethod === 'finance' && (
+                              <p className="text-sm text-gray-600">{formatCurrency(OWNERSHIP_PROTECTION_PRICES.paintAndFabric / 120)}/mo</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </label>
+
+                    {/* Tire & Wheel Protection */}
+                    <label className="flex items-start p-4 border-2 border-gray-300 rounded-lg hover:border-[#B43732] cursor-pointer transition-colors">
+                      <div className="mt-1 flex-shrink-0">
+                        <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center text-gray-600 text-xl">
+                          🚗
+                        </div>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={configurationData.ownershipProtection.tireAndWheel}
+                        onChange={(e) => setConfigurationData({
+                          ...configurationData,
+                          ownershipProtection: {
+                            ...configurationData.ownershipProtection,
+                            tireAndWheel: e.target.checked
+                          }
+                        })}
+                        className="mt-1 ml-3 h-5 w-5 text-[#B43732] focus:ring-[#B43732] rounded"
+                      />
+                      <div className="ml-3 flex-1">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className="font-semibold text-gray-900">Tire & Wheel Protection</p>
+                            <p className="text-sm text-gray-600 mb-1">Covers repair or replacement costs from road hazard damage</p>
+                            <p className="text-xs text-red-600 italic">⚠️ Without this: A single RV tire replacement can cost $400-600, multiply that by 6 tires</p>
+                          </div>
+                          <div className="text-right ml-4">
+                            <p className="font-bold text-gray-900">{formatCurrency(OWNERSHIP_PROTECTION_PRICES.tireAndWheel)}</p>
+                            {configurationData.paymentMethod === 'finance' && (
+                              <p className="text-sm text-gray-600">{formatCurrency(OWNERSHIP_PROTECTION_PRICES.tireAndWheel / 120)}/mo</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </label>
+
+                    {/* Monster Seal Protection */}
+                    <label className="flex items-start p-4 border-2 border-gray-300 rounded-lg hover:border-[#B43732] cursor-pointer transition-colors">
+                      <div className="mt-1 flex-shrink-0">
+                        <div className="w-10 h-10 bg-cyan-100 rounded-full flex items-center justify-center text-cyan-600 text-xl">
+                          💧
+                        </div>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={configurationData.ownershipProtection.monsterSeal}
+                        onChange={(e) => setConfigurationData({
+                          ...configurationData,
+                          ownershipProtection: {
+                            ...configurationData.ownershipProtection,
+                            monsterSeal: e.target.checked
+                          }
+                        })}
+                        className="mt-1 ml-3 h-5 w-5 text-[#B43732] focus:ring-[#B43732] rounded"
+                      />
+                      <div className="ml-3 flex-1">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className="font-semibold text-gray-900">Monster Seal Protection</p>
+                            <p className="text-sm text-gray-600 mb-1">Advanced sealant protection against leaks and water damage</p>
+                            <p className="text-xs text-red-600 italic">⚠️ Without this: Water leaks are the #1 cause of RV structural damage costing $5,000-$15,000 to repair</p>
+                          </div>
+                          <div className="text-right ml-4">
+                            <p className="font-bold text-gray-900">{formatCurrency(OWNERSHIP_PROTECTION_PRICES.monsterSeal)}</p>
+                            {configurationData.paymentMethod === 'finance' && (
+                              <p className="text-sm text-gray-600">{formatCurrency(OWNERSHIP_PROTECTION_PRICES.monsterSeal / 120)}/mo</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </label>
+
+                    {/* GAP Protection */}
+                    <label className="flex items-start p-4 border-2 border-gray-300 rounded-lg hover:border-[#B43732] cursor-pointer transition-colors">
+                      <div className="mt-1 flex-shrink-0">
+                        <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center text-green-600 text-xl">
+                          💰
+                        </div>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={configurationData.ownershipProtection.gap}
+                        onChange={(e) => setConfigurationData({
+                          ...configurationData,
+                          ownershipProtection: {
+                            ...configurationData.ownershipProtection,
+                            gap: e.target.checked
+                          }
+                        })}
+                        className="mt-1 ml-3 h-5 w-5 text-[#B43732] focus:ring-[#B43732] rounded"
+                      />
+                      <div className="ml-3 flex-1">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className="font-semibold text-gray-900">GAP Coverage</p>
+                            <p className="text-sm text-gray-600 mb-1">Covers the difference between insurance payout and loan balance in case of total loss</p>
+                            <p className="text-xs text-red-600 italic">⚠️ Without this: If totaled, you could owe $10,000+ more than insurance pays, leaving you with debt and no RV</p>
+                          </div>
+                          <div className="text-right ml-4">
+                            <p className="font-bold text-gray-900">{formatCurrency(OWNERSHIP_PROTECTION_PRICES.gap)}</p>
+                            {configurationData.paymentMethod === 'finance' && (
+                              <p className="text-sm text-gray-600">{formatCurrency(OWNERSHIP_PROTECTION_PRICES.gap / 120)}/mo</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </label>
+
+                    {/* 5 Year Roadside Assistance */}
+                    <label className="flex items-start p-4 border-2 border-gray-300 rounded-lg hover:border-[#B43732] cursor-pointer transition-colors">
+                      <div className="mt-1 flex-shrink-0">
+                        <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center text-orange-600 text-xl">
+                          🚨
+                        </div>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={configurationData.ownershipProtection.fiveYearRoadside}
+                        onChange={(e) => setConfigurationData({
+                          ...configurationData,
+                          ownershipProtection: {
+                            ...configurationData.ownershipProtection,
+                            fiveYearRoadside: e.target.checked
+                          }
+                        })}
+                        className="mt-1 ml-3 h-5 w-5 text-[#B43732] focus:ring-[#B43732] rounded"
+                      />
+                      <div className="ml-3 flex-1">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className="font-semibold text-gray-900">5-Year Roadside Assistance</p>
+                            <p className="text-sm text-gray-600 mb-1">24/7 emergency roadside support including towing, fuel delivery, and tire changes</p>
+                            <p className="text-xs text-red-600 italic">⚠️ Without this: A single RV tow can cost $500-1,500+ depending on distance, stranding you mid-trip</p>
+                          </div>
+                          <div className="text-right ml-4">
+                            <p className="font-bold text-gray-900">{formatCurrency(OWNERSHIP_PROTECTION_PRICES.fiveYearRoadside)}</p>
+                            {configurationData.paymentMethod === 'finance' && (
+                              <p className="text-sm text-gray-600">{formatCurrency(OWNERSHIP_PROTECTION_PRICES.fiveYearRoadside / 120)}/mo</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </label>
+
+                    {/* RV Life Protection */}
+                    <label className="flex items-start p-4 border-2 border-gray-300 rounded-lg hover:border-[#B43732] cursor-pointer transition-colors">
+                      <div className="mt-1 flex-shrink-0">
+                        <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 text-xl">
+                          🏕️
+                        </div>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={configurationData.ownershipProtection.rvLife}
+                        onChange={(e) => setConfigurationData({
+                          ...configurationData,
+                          ownershipProtection: {
+                            ...configurationData.ownershipProtection,
+                            rvLife: e.target.checked
+                          }
+                        })}
+                        className="mt-1 ml-3 h-5 w-5 text-[#B43732] focus:ring-[#B43732] rounded"
+                      />
+                      <div className="ml-3 flex-1">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className="font-semibold text-gray-900">RV Life Protection</p>
+                            <p className="text-sm text-gray-600 mb-1">Comprehensive lifestyle protection including trip interruption and vacation liability coverage</p>
+                            <p className="text-xs text-red-600 italic">⚠️ Without this: Trip cancellations or injuries at campgrounds could result in lost vacation costs and liability claims</p>
+                          </div>
+                          <div className="text-right ml-4">
+                            <p className="font-bold text-gray-900">{formatCurrency(OWNERSHIP_PROTECTION_PRICES.rvLife)}</p>
+                            {configurationData.paymentMethod === 'finance' && (
+                              <p className="text-sm text-gray-600">{formatCurrency(OWNERSHIP_PROTECTION_PRICES.rvLife / 120)}/mo</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </label>
+
+                    {/* Lifetime Battery Protection */}
+                    <label className="flex items-start p-4 border-2 border-gray-300 rounded-lg hover:border-[#B43732] cursor-pointer transition-colors">
+                      <div className="mt-1 flex-shrink-0">
+                        <div className="w-10 h-10 bg-yellow-100 rounded-full flex items-center justify-center text-yellow-600 text-xl">
+                          🔋
+                        </div>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={configurationData.ownershipProtection.lifetimeBattery}
+                        onChange={(e) => setConfigurationData({
+                          ...configurationData,
+                          ownershipProtection: {
+                            ...configurationData.ownershipProtection,
+                            lifetimeBattery: e.target.checked
+                          }
+                        })}
+                        className="mt-1 ml-3 h-5 w-5 text-[#B43732] focus:ring-[#B43732] rounded"
+                      />
+                      <div className="ml-3 flex-1">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className="font-semibold text-gray-900">Lifetime Battery Replacement</p>
+                            <p className="text-sm text-gray-600 mb-1">Free battery replacement for the life of your RV ownership</p>
+                            <p className="text-xs text-red-600 italic">⚠️ Without this: Replacing RV house batteries every 3-5 years at $200-400 each adds up over time</p>
+                          </div>
+                          <div className="text-right ml-4">
+                            <p className="font-bold text-gray-900">{formatCurrency(OWNERSHIP_PROTECTION_PRICES.lifetimeBattery)}</p>
+                            {configurationData.paymentMethod === 'finance' && (
+                              <p className="text-sm text-gray-600">{formatCurrency(OWNERSHIP_PROTECTION_PRICES.lifetimeBattery / 120)}/mo</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </label>
+
+                    {/* Roof Protection */}
+                    <label className="flex items-start p-4 border-2 border-gray-300 rounded-lg hover:border-[#B43732] cursor-pointer transition-colors">
+                      <div className="mt-1 flex-shrink-0">
+                        <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center text-red-600 text-xl">
+                          🏠
+                        </div>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={configurationData.ownershipProtection.roof}
+                        onChange={(e) => setConfigurationData({
+                          ...configurationData,
+                          ownershipProtection: {
+                            ...configurationData.ownershipProtection,
+                            roof: e.target.checked
+                          }
+                        })}
+                        className="mt-1 ml-3 h-5 w-5 text-[#B43732] focus:ring-[#B43732] rounded"
+                      />
+                      <div className="ml-3 flex-1">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className="font-semibold text-gray-900">Roof Protection Plan</p>
+                            <p className="text-sm text-gray-600 mb-1">Complete coverage for roof repairs and replacement due to leaks or weather damage</p>
+                            <p className="text-xs text-red-600 italic">⚠️ Without this: Roof replacement costs $8,000-$12,000 and roof damage voids most warranties</p>
+                          </div>
+                          <div className="text-right ml-4">
+                            <p className="font-bold text-gray-900">{formatCurrency(OWNERSHIP_PROTECTION_PRICES.roof)}</p>
+                            {configurationData.paymentMethod === 'finance' && (
+                              <p className="text-sm text-gray-600">{formatCurrency(OWNERSHIP_PROTECTION_PRICES.roof / 120)}/mo</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </label>
+                  </div>
                 </div>
 
                 <div className="flex justify-end pt-6 border-t border-gray-200">
@@ -1357,7 +1745,7 @@ export default function PurchaseWorkflow() {
                   </div>
                   <div>
                     <p className="text-sm text-gray-500">Location</p>
-                    <p className="text-gray-800 font-medium">{selectedRV.location || 'TBD'}</p>
+                    <p className="text-gray-800 font-medium">{getFullLocationName(selectedRV)}</p>
                   </div>
                 </div>
               </div>
@@ -1366,23 +1754,17 @@ export default function PurchaseWorkflow() {
               <div className="bg-gray-50 rounded-lg p-6 border border-gray-200">
                 <h4 className="font-bold text-gray-800 mb-3">Configuration</h4>
                 <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-gray-700">Delivery Method:</span>
-                    <span className="font-medium text-gray-900 capitalize">{configurationData.deliveryMethod === 'pickup' ? 'Pick Up' : 'Ship To'}</span>
+                  <div>
+                    <span className="text-gray-700">Delivery Method: </span>
+                    <span className="font-medium text-gray-900">{configurationData.deliveryMethod === 'pickup' ? 'Pick Up' : 'Ship To'}</span>
                   </div>
                   {configurationData.deliveryMethod === 'ship' && (
                     <div className="mt-2">
                       <p className="text-sm text-gray-500 mb-1">Shipping Address:</p>
-                      {configurationData.shippingAddressSameAsCustomer ? (
-                        <p className="text-gray-800 font-medium italic">(Same as customer address)</p>
-                      ) : (
-                        <>
-                          <p className="text-gray-800 font-medium">{configurationData.shippingAddress}</p>
-                          <p className="text-gray-800 font-medium">
-                            {configurationData.shippingCity}, {configurationData.shippingState} {configurationData.shippingZipCode}
-                          </p>
-                        </>
-                      )}
+                      <p className="text-gray-800 font-medium">{configurationData.shippingAddress}</p>
+                      <p className="text-gray-800 font-medium">
+                        {configurationData.shippingCity}, {configurationData.shippingState} {configurationData.shippingZipCode}
+                      </p>
                     </div>
                   )}
                 </div>
@@ -1414,6 +1796,75 @@ export default function PurchaseWorkflow() {
                 </div>
               </div>
 
+              {/* Ownership Protection */}
+              {Object.values(configurationData.ownershipProtection).some(selected => selected) && (
+                <div className="bg-gray-50 rounded-lg p-6 border border-gray-200">
+                  <h4 className="font-bold text-gray-800 mb-3">Ownership Protection</h4>
+                  <div className="space-y-2">
+                    {configurationData.ownershipProtection.extendedServiceContract && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-700">Extended Service Contract</span>
+                        <span className="font-medium text-gray-900">{formatCurrency(OWNERSHIP_PROTECTION_PRICES.extendedServiceContract)}</span>
+                      </div>
+                    )}
+                    {configurationData.ownershipProtection.paintAndFabric && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-700">Paint & Fabric Protection</span>
+                        <span className="font-medium text-gray-900">{formatCurrency(OWNERSHIP_PROTECTION_PRICES.paintAndFabric)}</span>
+                      </div>
+                    )}
+                    {configurationData.ownershipProtection.tireAndWheel && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-700">Tire & Wheel Protection</span>
+                        <span className="font-medium text-gray-900">{formatCurrency(OWNERSHIP_PROTECTION_PRICES.tireAndWheel)}</span>
+                      </div>
+                    )}
+                    {configurationData.ownershipProtection.monsterSeal && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-700">Monster Seal Protection</span>
+                        <span className="font-medium text-gray-900">{formatCurrency(OWNERSHIP_PROTECTION_PRICES.monsterSeal)}</span>
+                      </div>
+                    )}
+                    {configurationData.ownershipProtection.gap && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-700">GAP Coverage</span>
+                        <span className="font-medium text-gray-900">{formatCurrency(OWNERSHIP_PROTECTION_PRICES.gap)}</span>
+                      </div>
+                    )}
+                    {configurationData.ownershipProtection.fiveYearRoadside && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-700">5-Year Roadside Assistance</span>
+                        <span className="font-medium text-gray-900">{formatCurrency(OWNERSHIP_PROTECTION_PRICES.fiveYearRoadside)}</span>
+                      </div>
+                    )}
+                    {configurationData.ownershipProtection.rvLife && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-700">RV Life Protection</span>
+                        <span className="font-medium text-gray-900">{formatCurrency(OWNERSHIP_PROTECTION_PRICES.rvLife)}</span>
+                      </div>
+                    )}
+                    {configurationData.ownershipProtection.lifetimeBattery && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-700">Lifetime Battery Replacement</span>
+                        <span className="font-medium text-gray-900">{formatCurrency(OWNERSHIP_PROTECTION_PRICES.lifetimeBattery)}</span>
+                      </div>
+                    )}
+                    {configurationData.ownershipProtection.roof && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-700">Roof Protection Plan</span>
+                        <span className="font-medium text-gray-900">{formatCurrency(OWNERSHIP_PROTECTION_PRICES.roof)}</span>
+                      </div>
+                    )}
+                    <div className="pt-2 mt-2 border-t border-gray-300">
+                      <div className="flex justify-between items-center">
+                        <span className="font-semibold text-gray-900">Protection Total:</span>
+                        <span className="font-bold text-gray-900">{formatCurrency(calculateOwnershipProtectionTotal())}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Payment Method */}
               <div className="bg-gray-50 rounded-lg p-6 border border-gray-200">
                 <h4 className="font-bold text-gray-800 mb-3">Payment Method</h4>
@@ -1428,6 +1879,37 @@ export default function PurchaseWorkflow() {
                   </div>
                 )}
               </div>
+
+              {/* Price Breakdown */}
+              {selectedRV && (
+                <div className="bg-blue-50 rounded-lg p-6 border border-blue-200">
+                  <h4 className="font-bold text-gray-800 mb-3">Price Breakdown</h4>
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-700">RV Price (15% Kiewit Discount):</span>
+                      <span className="font-medium text-gray-900">{formatCurrency(calculateDiscountedPrice(selectedRV.price))}</span>
+                    </div>
+                    {configurationData.deliveryMethod === 'ship' && unitDistances.get(selectedRV.stock) && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-700">Shipping ({unitDistances.get(selectedRV.stock)} mi × $2.50):</span>
+                        <span className="font-medium text-gray-900">{formatCurrency(calculateShippingCost(unitDistances.get(selectedRV.stock)!))}</span>
+                      </div>
+                    )}
+                    {calculateOwnershipProtectionTotal() > 0 && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-700">Ownership Protection:</span>
+                        <span className="font-medium text-gray-900">{formatCurrency(calculateOwnershipProtectionTotal())}</span>
+                      </div>
+                    )}
+                    <div className="pt-2 mt-2 border-t border-blue-300">
+                      <div className="flex justify-between items-center">
+                        <span className="font-bold text-gray-900 text-lg">Grand Total:</span>
+                        <span className="font-bold text-[#B43732] text-lg">{formatCurrency(calculateTotalPrice())}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                 <p className="text-sm text-yellow-800">
